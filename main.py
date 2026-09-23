@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from openai import APIError, APITimeoutError, AsyncOpenAI, RateLimitError
 from pydantic import BaseModel, ConfigDict, Field
 
+from catalog import INDICATOR_INFO, MEASURE_NAMES
 from engine import INITIAL, MEASURES, POPULATION, SYNERGIES, WEIGHTS
 from engine import ValidationError, baseline_metrics, simulate
 
@@ -105,16 +106,9 @@ def get_data():
     return {
         "status": "ok",
         "baseline": baseline_metrics(),
-        "indicator_info": {
-            key: {"label": f"{direction} — показатель {key[-1]}",
-                  "direction": direction,
-                  "description": "Синтетический индекс от 0 до 100; больше — лучше."}
-            for prefix, direction in (("T", "Транспорт"), ("E", "Экология"),
-                                       ("S", "Соцсфера"), ("B", "Безопасность"),
-                                       ("C", "Сервисы"))
-            for key in (prefix + "1", prefix + "2")
-        },
-        "measures": [dict(id=mid, **measure) for mid, measure in MEASURES.items()],
+        "indicator_info": INDICATOR_INFO,
+        "measures": [dict(id=mid, name=MEASURE_NAMES[mid], **measure)
+                     for mid, measure in MEASURES.items()],
         "districts": {name: {"population_share": POPULATION[name],
                               "indicators": indicators}
                       for name, indicators in INITIAL.items()},
@@ -181,7 +175,9 @@ def simulate_city(payload: Annotated[SimulationRequest | list[SelectedMeasure], 
             for name, district in result["districts"].items()
         },
         "budget": result["budget"],
-        "selected_measures": result["selected_measures"],
+        "selected_measures": [dict(**measure, name=MEASURE_NAMES[measure["id"]])
+                              for measure in result["selected_measures"]],
+        "indicator_info": INDICATOR_INFO,
         "synergies": result["synergies"],
         "summary_before": result["baseline"],
         "summary_after": result["summary"],

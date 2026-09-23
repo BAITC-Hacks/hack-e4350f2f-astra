@@ -56,10 +56,10 @@ function renderMeasures() {
     const reasons=chosen ? [] : validationErrors([...getSelected(),candidate],false);
     const effects=Object.entries(m.effects).map(([k,v]) => `${k} ${signed(v)}`).join(" · ");
     return `<article class="measure ${chosen ? "chosen":""}">
-      <button type="button" class="toggle" data-toggle="${m.id}" aria-label="${chosen ? "Убрать":"Добавить"} ${m.id}" aria-pressed="${chosen}" ${state.busy || reasons.length ? "disabled":""}>${chosen ? "✓":"+"}</button>
+      <button type="button" class="toggle" data-toggle="${m.id}" aria-label="${chosen ? "Убрать":"Добавить"} ${m.id}: ${esc(m.name)}" aria-pressed="${chosen}" ${state.busy || reasons.length ? "disabled":""}>${chosen ? "✓":"+"}</button>
       <div class="measure-content"><div class="measure-meta"><span class="mono">${m.id}</span><span>${esc(m.direction)}</span><span class="badge">${m.scope}</span></div>
-      <h3>${esc(effects)}</h3><p class="fine-print">Задержка ${m.lag} кв. · Реализуется ${(8-m.lag)/8*100}% эффекта</p>
-      <div class="measure-bottom">${m.scope === "Район" ? `<label>Район <select data-district="${m.id}" aria-label="Район для ${m.id}" ${state.busy ? "disabled":""}>${Object.keys(state.data.districts).map((d) => `<option ${d===target ? "selected":""}>${esc(d)}</option>`).join("")}</select></label>` : "<span>Во всех 5 районах</span>"}<span class="cost">${m.cost} <small>у.е.</small></span></div>
+      <h3>${esc(m.name)}</h3><p class="fine-print">Полный эффект: ${esc(effects)}</p><p class="fine-print">Задержка ${m.lag} кв. · Реализуется ${(8-m.lag)/8*100}% эффекта</p>
+      <div class="measure-bottom">${m.scope === "Район" ? `<label>Район <select data-district="${m.id}" aria-label="Район для ${m.id}: ${esc(m.name)}" ${state.busy ? "disabled":""}>${Object.keys(state.data.districts).map((d) => `<option ${d===target ? "selected":""}>${esc(d)}</option>`).join("")}</select></label>` : "<span>Во всех 5 районах</span>"}<span class="cost">${m.cost} <small>у.е.</small></span></div>
       ${reasons.length ? `<p class="fine-print">${esc(reasons.join(" "))}</p>`:""}</div></article>`;
   }).join("");
 }
@@ -73,7 +73,7 @@ function renderDistricts() {
       <div class="indicators">${Object.entries(values).map(([k,v]) => {
         const info=state.data.indicator_info[k], delta=result?.deltas[k] || 0;
         return `<div class="metric ${v<40 ? "critical":""}"><div class="metric-heading"><span title="${esc(info.description)}">${k} · ${esc(info.label)}</span><span class="metric-value">${result ? `${fmt(d.indicators[k])} → `:""}${fmt(v)}</span></div>
-        <div class="metric-track" role="progressbar" aria-label="${esc(name)}: ${k}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}"><div class="metric-fill" style="--value:${v}%"></div></div>
+        <div class="metric-track" role="progressbar" aria-label="${esc(name)}: ${k} — ${esc(info.label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}"><div class="metric-fill" style="--value:${v}%"></div></div>
         ${result ? `<span class="${delta<0 ? "loss":"gain"}">${signed(delta)}</span>`:""}${v<40 ? '<span class="critical-badge">Ниже 40</span>':""}</div>`;
       }).join("")}</div></article>`;
   }).join("");

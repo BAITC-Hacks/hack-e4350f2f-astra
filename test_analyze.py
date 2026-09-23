@@ -62,6 +62,8 @@ class AnalysisTests(unittest.TestCase):
         self.payload["score_after"] = 9999
         self.payload["budget"]["spent"] = 0
         self.payload["selected_measures"][0]["cost"] = 0
+        self.payload["selected_measures"][0]["name"] = "Поддельное название"
+        self.payload["indicator_info"] = {"S1": {"label": "Поддельный показатель"}}
         self.payload["districts"] = {}
         response = self.client.post("/api/analyze", json=self.payload)
         self.assertEqual(response.status_code, 200)
@@ -69,6 +71,9 @@ class AnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(facts["score_after"], 56.54307)
         self.assertEqual(facts["budget"]["spent"], 95)
         self.assertEqual(len(facts["districts"]), 5)
+        self.assertEqual(facts["selected_measures"][0]["name"],
+                         "Школа + детсад (модульное строительство)")
+        self.assertEqual(facts["indicator_info"]["S1"]["label"], "Школы и детсады")
 
     def test_selection_only_and_invalid_selection(self):
         response = self.client.post("/api/analyze", json={"selected_measures": REFERENCE})

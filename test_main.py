@@ -22,6 +22,10 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(len(data["rules"]["synergies"]), 3)
         self.assertAlmostEqual(data["baseline"]["summary"]["score"], 52.55768)
         self.assertEqual(len(data["indicator_info"]), 10)
+        self.assertEqual(data["indicator_info"]["S1"]["label"], "Школы и детсады")
+        self.assertTrue(all(measure["name"] for measure in data["measures"]))
+        for measure in data["measures"]:
+            self.assertTrue(set(measure["effects"]) <= data["indicator_info"].keys())
 
     def test_frontend_and_private_files(self):
         for path in ("/", "/app.js", "/styles.css"):
