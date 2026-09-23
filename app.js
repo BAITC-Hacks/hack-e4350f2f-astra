@@ -4,7 +4,7 @@ const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;"
 const fmt = (n) => Number(n).toFixed(2);
 const signed = (n) => `${n >= 0 ? "+" : ""}${fmt(n)}`;
 const state = { data:null, selected:new Set(), targets:{}, category:"Все", result:null,
-  busy:false, analysis:"", error:"", analysisError:"", scenarios:{ A:null, B:null } };
+  busy:false, analysis:"", error:"", analysisError:"", scenarios:{ A:null, B:null }, improvement:null };
 
 const DRAFT_KEY = "akim-selection-v1";
 let activeView="decisions";
@@ -159,7 +159,7 @@ function validationErrors(selected, requireFive = true) {
   }
   return errors;
 }
-function invalidate() { state.result=null; state.analysis=""; state.error=""; state.analysisError=""; }
+function invalidate() { state.result=null; state.analysis=""; state.error=""; state.analysisError=""; state.improvement=null; }
 function renderFilters() {
   $("filters").innerHTML = ["Все",...new Set(state.data.measures.map((m) => m.direction))].map((c) =>
     `<button type="button" class="filter ${c===state.category ? "active":""}" data-category="${esc(c)}" aria-pressed="${c===state.category}">${esc(c)}</button>`).join("");
@@ -181,6 +181,7 @@ function renderMeasures() {
   }).join("");
 }
 function renderDistricts() {
+  renderInsights();
   $("district-picker").innerHTML=Object.keys(state.data.districts).map(name=>`<button class="filter ${name===activeDistrict ? "active":""}" type="button" data-pick-district="${esc(name)}" aria-pressed="${name===activeDistrict}">${esc(name)}</button>`).join("");
   $("district-state").textContent=state.result ? "После 8 кварталов":"Исходные данные";
   $("districts").innerHTML=Object.entries(state.data.districts).map(([name,d]) => {
@@ -207,6 +208,26 @@ function renderAnalysis(text) {
   $("verdict").replaceChildren(fragment);
 }
 
+function renderInsights() {
+  const ranking=Object.keys(state.data.districts).map(name=>({name,
+    score:state.result?.districts[name].d_after ?? state.data.baseline.districts[name],
+    critical:Object.values(state.result?.districts[name].after || state.data.districts[name].indicators).filter(v=>v<40).length
+  })).sort((a,b)=>a.score-b.score || a.name.localeCompare(b.name));
+  $("district-ranking").innerHTML=ranking.map(d=>`<button type="button" class="ranking-card ${d.name===activeDistrict ? "active":""}" data-rank-district="${esc(d.name)}" aria-pressed="${d.name===activeDistrict}"><span>${esc(d.name)}</span><strong>${fmt(d.score)}</strong><small>${d.critical ? `Критических: ${d.critical}`:"Нет критических"}</small></button>`).join("");
+  const r=state.result;
+  $("score-breakdown").hidden=!r;
+  if (r) {
+    const b=r.score_breakdown || {average:.7*(r.summary_after.d_avg-r.summary_before.d_avg),weakest:.3*(r.summary_after.d_min-r.summary_before.d_min),critical:r.summary_before.n_crit-r.summary_after.n_crit};
+    $("score-breakdown").innerHTML=`<h3>Из чего складывается ${signed(r.score_delta)} к Score</h3><div class="breakdown-grid">${[["Средний индекс × 0,7",b.average],["Слабейший район × 0,3",b.weakest],["Изменение штрафа за критические показатели",b.critical]].map(([label,v])=>`<div><strong>${signed(v)}</strong><span>${label}</span></div>`).join("")}</div><p class="fine-print">Вклад каждого компонента относительно исходного города. Округление в отображении может дать разницу 0,01.</p>`;
+  }
+  $("find-improvement").disabled=state.busy || !r;
+  const suggestion=state.improvement;
+  if (!suggestion) { $("improvement").textContent=r ? "Поиск выполняется по формулам симулятора и не требует AI-ключа." : "Сначала рассчитайте свой пакет из пяти решений."; return; }
+  if (!suggestion.improved) { $("improvement").textContent=`Проверено ${suggestion.checked} допустимых замен. Ни одна не повысила Score. Изменение нескольких решений одновременно может дать другой результат.`; return; }
+  const label=m=>`${state.data.measures.find(x=>x.id===m.id).name} (${m.district || "весь город"})`;
+  $("improvement").innerHTML=`<p><strong>${esc(label(suggestion.removed))}</strong> → <strong>${esc(label(suggestion.added))}</strong></p><p>Score: ${fmt(suggestion.current_score)} → ${fmt(suggestion.candidate.score_after)} (${signed(suggestion.score_gain)}). Бюджет: ${suggestion.candidate.budget.spent} / 100 (${signed(suggestion.budget_delta)} у.е. к текущему плану).</p><ul>${Object.entries(suggestion.district_deltas).filter(([,v])=>Math.abs(v)>1e-9).map(([d,v])=>`<li>${esc(d)}: ${signed(v)} к индексу района</li>`).join("")}</ul><p class="fine-print">Проверено ${suggestion.checked} допустимых замен. Текущий план останется прежним, пока вы не примените вариант. Сохраните его как A для сравнения.</p><button type="button" class="filter" id="apply-improvement" ${state.busy ? "disabled":""}>Применить вариант</button>`;
+}
+
 function renderComparison() {
   const {A, B}=state.scenarios;
   for (const slot of ["A", "B"]) {
@@ -215,6 +236,7 @@ function renderComparison() {
   }
   $("export-scenarios").disabled=!A && !B;
   $("clear-scenarios").disabled=state.busy || (!A && !B);
+  $("import-scenarios").disabled=state.busy;
   const cells=(label, get, format=fmt) => `<tr><th scope="row">${esc(label)}</th>${[A,B].map((s) => `<td>${s ? esc(format(get(s.result))) : "—"}</td>`).join("")}</tr>`;
   const weakest=(r) => Object.entries(r.districts).filter(([,d]) => Math.abs(d.d_after-r.summary_after.d_min)<1e-9).map(([name]) => name).join(", ");
   $("comparison-table").innerHTML=`<thead><tr><th scope="col">Показатель</th><th scope="col">Сценарий A</th><th scope="col">Сценарий B</th></tr></thead><tbody>`+
@@ -373,6 +395,51 @@ async function initialize() {
   } catch(e) { $("error").hidden=false; $("error").textContent=e.message; $("retry-data").hidden=false; }
 }
 $("retry-data").addEventListener("click",initialize);
+$("district-ranking").addEventListener("click",e=>{
+  const b=e.target.closest("[data-rank-district]"); if (!b) return;
+  activeDistrict=b.dataset.rankDistrict; renderDistricts();
+  $("district-picker").scrollIntoView({block:"center"});
+});
+$("find-improvement").addEventListener("click",async()=>{
+  if (state.busy || !state.result) return;
+  state.busy=true; state.error=""; render();
+  try { state.improvement=await api("/api/improve",{selected_measures:getSelected()}); }
+  catch(e) { state.error=e.message; }
+  finally { state.busy=false; render(); }
+});
+$("improvement").addEventListener("click",e=>{
+  if (!e.target.closest("#apply-improvement") || state.busy || !state.improvement?.candidate) return;
+  const candidate=state.improvement.candidate;
+  state.selected=new Set(candidate.selected_measures.map(m=>m.id));
+  state.targets=Object.fromEntries(candidate.selected_measures.filter(m=>m.district).map(m=>[m.id,m.district]));
+  invalidate(); state.result=candidate;
+  state.analysisError="План обновлён. Запросите AI-анализ для нового сценария во вкладке советника.";
+  render();
+});
+$("import-scenarios").addEventListener("click",()=>{ if (!state.busy) $("import-file").click(); });
+$("import-file").addEventListener("change",async()=>{
+  const file=$("import-file").files[0]; $("import-file").value="";
+  if (!file || state.busy) return;
+  state.busy=true; render(); $("import-status").textContent="Проверяем и пересчитываем импорт…";
+  try {
+    if (file.size>1024*1024) throw new Error("Файл должен быть не больше 1 МБ.");
+    const imported=JSON.parse(await file.text());
+    if (imported.format_version!==1 || imported.dataset!=="akim-5-hours" || !imported.scenarios || typeof imported.scenarios!=="object") throw new Error("Неверный формат. Выберите JSON, сохранённый кнопкой «Скачать JSON».");
+    const restored={};
+    for (const slot of ["A","B"]) {
+      if (imported.scenarios[slot]==null) continue;
+      const measures=imported.scenarios[slot]?.result?.selected_measures;
+      if (!Array.isArray(measures) || measures.length!==5) throw new Error(`Сценарий ${slot}: требуется пять решений.`);
+      const selected=measures.map(m=>({id:m?.id,...(m?.district!=null ? {district:m.district}:{})}));
+      restored[slot]={result:await api("/api/simulate",{selected_measures:selected}),analysis:null};
+    }
+    if (!Object.keys(restored).length) throw new Error("В файле нет сценариев.");
+    // Применяем только после успешной проверки всех сценариев файла.
+    state.scenarios={...state.scenarios,...restored};
+    $("import-status").textContent=`Импортированы ${Object.keys(restored).join(", ")}. Соответствующие слоты заменены. Цифры пересчитаны сервером; AI-тексты из файла не импортируются.`;
+  } catch(e) { $("import-status").textContent=`Импорт не выполнен: ${e.message}`; }
+  finally { state.busy=false; render(); }
+});
 $("district-picker").addEventListener("click",e=>{
   const b=e.target.closest("[data-pick-district]"); if (!b) return;
   activeDistrict=b.dataset.pickDistrict; renderDistricts();

@@ -214,6 +214,41 @@ def run():
                 expect(page.locator("#decision-count")).to_have_text("0")
                 expect(page.locator("#score")).to_have_text("52.56")
                 # Отключённый localStorage не должен мешать загрузке и выбору.
+                click('[data-view="results"]')
+                expect(page.locator('.ranking-card').first).to_contain_text("Нура")
+                expect(page.locator('#find-improvement')).to_be_disabled()
+                click('#reference')
+                page.locator('[data-district="M7"]').select_option(label="Сарыарка")
+                click('#simulate')
+                expect(page.locator('#score')).to_have_text('55.24')
+                expect(page.locator('#verdict')).to_contain_text('Тестовый анализ')
+                click('[data-view="results"]')
+                expect(page.locator('#score-breakdown')).to_contain_text('Из чего складывается')
+                page.locator('#find-improvement').click()
+                expect(page.locator('#apply-improvement')).to_be_enabled()
+                # Поиск не меняет текущий план до явного применения.
+                expect(page.locator('#score')).to_have_text('55.24')
+                page.locator('#apply-improvement').click()
+                assert float(page.locator('#score').text_content()) > 55.24
+                expect(page.locator('#verdict')).not_to_contain_text('Тестовый анализ')
+                page.reload()
+                assert float(page.locator('#score').text_content()) > 55.24
+                click('[data-view="compare"]')
+                exported['scenarios']['A']['result']['score_after'] = 9999
+                page.locator('#import-file').set_input_files({
+                    'name':'scenarios.json', 'mimeType':'application/json',
+                    'buffer':json.dumps(exported).encode('utf-8')})
+                expect(page.locator('#import-status')).to_contain_text('Импортированы A, B')
+                expect(page.locator('#comparison-table')).to_contain_text('56.54')
+                expect(page.locator('#comparison-table')).not_to_contain_text('9999')
+                expect(page.locator('#comparison-measures details')).to_have_count(0)
+                previous = page.locator('#comparison-table').text_content()
+                exported['scenarios']['B']['result']['selected_measures'] = []
+                page.locator('#import-file').set_input_files({
+                    'name':'invalid.json', 'mimeType':'application/json',
+                    'buffer':json.dumps(exported).encode('utf-8')})
+                expect(page.locator('#import-status')).to_contain_text('Импорт не выполнен')
+                assert page.locator('#comparison-table').text_content() == previous
                 page.add_init_script("Storage.prototype.getItem=()=>{throw new Error('blocked')}; Storage.prototype.setItem=()=>{throw new Error('blocked')};")
                 page.reload()
                 expect(page.locator(".measure")).to_have_count(14)

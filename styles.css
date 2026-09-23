@@ -1,4 +1,17 @@
 @charset "UTF-8";
+.insight-block { margin:20px 0; padding:18px; border:1px solid #c7d3bc; border-radius:12px; background:#f7f9f0; }
+.insight-block h3 { color:#153e2a; font-size:17px; }
+.district-ranking { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-top:14px; }
+.ranking-card { display:grid; gap:6px; text-align:left; background:#fffef8; color:#244831; border:1px solid #bccfb0; border-radius:8px; padding:12px; }
+.ranking-card.active { border:2px solid #245b3a; padding:11px; background:#e6f0dd; }
+.ranking-card strong { font:24px ui-monospace,monospace; }
+.ranking-card small { color:#58674b; }
+.breakdown-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-top:14px; }
+.breakdown-grid div { display:grid; gap:8px; }
+.breakdown-grid strong { font:24px ui-monospace,monospace; color:#245b3a; }
+.breakdown-grid span { color:#3f5538; font-size:12px; }
+#improvement { margin-top:12px; font-size:13px; line-height:1.8; }
+#find-improvement { margin-top:12px; }
 .comparison { margin-top:20px; }
 .comparison-actions { display:flex; flex-wrap:wrap; gap:12px; margin:20px 0; }
 .table-scroll { overflow-x:auto; }

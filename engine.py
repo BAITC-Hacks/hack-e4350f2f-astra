@@ -186,6 +186,45 @@ def simulate(selected_measures):
                 selected_measures=applied, districts=districts, synergies=synergies)
 
 
+def improve(selected_measures):
+    """Лучший допустимый сосед: заменить ровно одно решение (меру и/или район).
+
+    Полный перебор соседей, а не поиск глобального оптимума. При равном Score
+    предпочитается меньшая стоимость, затем лексикографический порядок решений.
+    """
+    selected, _ = _validate(selected_measures)
+    selected = sorted(selected, key=lambda m: m["id"])
+    current = simulate(selected)
+    best = None
+    checked = 0
+    for index, old in enumerate(selected):
+        other_ids = {m["id"] for i, m in enumerate(selected) if i != index}
+        for mid, measure in MEASURES.items():
+            if mid in other_ids:
+                continue
+            targets = list(INITIAL) if measure["scope"] == "Район" else [None]
+            for district in targets:
+                replacement = dict(id=mid, district=district)
+                if replacement == old:
+                    continue
+                candidate = selected.copy()
+                candidate[index] = replacement
+                try:
+                    result = simulate(candidate)
+                except ValidationError:
+                    continue
+                checked += 1
+                if result["score"] <= current["score"] + 1e-9:
+                    continue
+                key = (-result["score"], result["budget"]["spent"],
+                       tuple(sorted((m["id"], m["district"] or "") for m in candidate)))
+                if best is None or key < best[0]:
+                    best = (key, result, old, replacement)
+    return dict(current=current, candidate=best[1] if best else None,
+                removed=best[2] if best else None, added=best[3] if best else None,
+                checked=checked)
+
+
 if __name__ == "__main__":
     import json
 

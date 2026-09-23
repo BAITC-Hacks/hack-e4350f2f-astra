@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from catalog import INDICATOR_INFO, MEASURE_NAMES
 from engine import INITIAL, MEASURES, POPULATION, SYNERGIES, WEIGHTS
-from engine import ValidationError, baseline_metrics, simulate
+from engine import ValidationError, baseline_metrics, improve, simulate
 
 
 app = FastAPI(title="QalaAI: Цифровой советник акима", version="1.0.0")
@@ -160,11 +160,20 @@ def simulate_city(payload: Annotated[SimulationRequest | list[SelectedMeasure], 
     """
     selected = payload.selected_measures if isinstance(payload, SimulationRequest) else payload
     result = simulate([item.model_dump() for item in selected])
+    return format_result(result)
+
+
+def format_result(result):
     return {
         "status": "ok",
         "score_before": result["baseline"]["score"],
         "score_after": result["score"],
         "score_delta": result["deltas"]["score"],
+        "score_breakdown": {
+            "average": 0.7 * result["deltas"]["d_avg"],
+            "weakest": 0.3 * result["deltas"]["d_min"],
+            "critical": -result["deltas"]["n_crit"],
+        },
         "districts": {
             name: {
                 "population_share": district["population_share"],
@@ -186,6 +195,24 @@ def simulate_city(payload: Annotated[SimulationRequest | list[SelectedMeasure], 
         "synergies": result["synergies"],
         "summary_before": result["baseline"],
         "summary_after": result["summary"],
+    }
+
+
+@app.post("/api/improve")
+def improve_city(payload: SimulationRequest):
+    found = improve([m.model_dump() for m in payload.selected_measures])
+    current = found["current"]
+    candidate = found["candidate"]
+    return {
+        "status": "ok", "scope": "one_decision", "checked": found["checked"],
+        "improved": candidate is not None,
+        "current_score": current["score"],
+        "score_gain": candidate["score"] - current["score"] if candidate else 0,
+        "budget_delta": candidate["budget"]["spent"] - current["budget"]["spent"] if candidate else 0,
+        "removed": found["removed"], "added": found["added"],
+        "candidate": format_result(candidate) if candidate else None,
+        "district_deltas": {d: candidate["districts"][d]["d_final"] - current["districts"][d]["d_final"]
+                            for d in INITIAL} if candidate else {},
     }
 
 
