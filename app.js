@@ -6,6 +6,40 @@ const signed = (n) => `${n >= 0 ? "+" : ""}${fmt(n)}`;
 const state = { data:null, selected:new Set(), targets:{}, category:"Все", result:null,
   busy:false, analysis:"", error:"", analysisError:"", scenarios:{ A:null, B:null } };
 
+const DRAFT_KEY = "akim-selection-v1";
+function saveSelection() {
+  if (!state.data) return;
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({version:1,
+      selected:[...state.selected], targets:state.targets, category:state.category}));
+  } catch (_) { /* Запрет или переполнение хранилища не блокирует симулятор. */ }
+}
+function restoreSelection() {
+  try {
+    const saved=JSON.parse(localStorage.getItem(DRAFT_KEY));
+    if (!saved || saved.version!==1 || !Array.isArray(saved.selected)) return;
+    const categories=["Все",...state.data.measures.map(m=>m.direction)];
+    state.category=categories.includes(saved.category) ? saved.category : "Все";
+    const targets=saved.targets && typeof saved.targets === "object" ? saved.targets : {};
+    const districts=Object.keys(state.data.districts);
+    state.targets={}; state.selected.clear();
+    for (const measure of state.data.measures) {
+      if (measure.scope === "Район" && districts.includes(targets[measure.id]))
+        state.targets[measure.id]=targets[measure.id];
+    }
+    const restored=[];
+    for (const id of new Set(saved.selected)) {
+      const measure=state.data.measures.find(m=>m.id===id);
+      if (!measure || (measure.scope === "Район" && !state.targets[id])) continue;
+      const candidate={id,...(measure.scope === "Район" ? {district:state.targets[id]} : {})};
+      if (validationErrors([...restored,candidate],false).length) continue;
+      restored.push(candidate); state.selected.add(id);
+    }
+    if (state.selected.size!==saved.selected.length)
+      state.error="Часть сохранённых мер больше не соответствует правилам и была убрана. Проверьте выбор.";
+  } catch (_) { /* Повреждённый или недоступный черновик не мешает загрузке. */ }
+}
+
 async function api(path, body) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60000);
@@ -118,6 +152,7 @@ function renderComparison() {
 
 function render() {
   if (!state.data) return;
+  saveSelection();
   renderFilters(); renderMeasures(); renderDistricts(); renderComparison();
   $("export-report").disabled=state.busy || !state.result;
   $("report-status").textContent="";
@@ -197,7 +232,7 @@ async function analyze() {
 }
 $("filters").addEventListener("click",(e) => {
   const b=e.target.closest("[data-category]"); if (!b) return;
-  state.category=b.dataset.category; renderFilters(); renderMeasures();
+  state.category=b.dataset.category; saveSelection(); renderFilters(); renderMeasures();
 });
 $("measures").addEventListener("click",(e) => {
   const b=e.target.closest("[data-toggle]"); if (!b || b.disabled || state.busy) return;
@@ -237,7 +272,7 @@ async function initialize() {
   $("retry-data").hidden=true;
   try {
     if (location.protocol === "file:") throw new Error("Запустите сервер и откройте http://127.0.0.1:8000 вместо файла.");
-    state.data=await api("/api/data"); state.error=""; render();
+    state.data=await api("/api/data"); state.error=""; restoreSelection(); render();
   } catch(e) { $("error").hidden=false; $("error").textContent=e.message; $("retry-data").hidden=false; }
 }
 $("retry-data").addEventListener("click",initialize);
