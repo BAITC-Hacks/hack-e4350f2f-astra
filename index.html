@@ -48,6 +48,11 @@
     <section class="panel advisor section-panel" aria-labelledby="advisor-title">
       <div class="advisor-heading"><div><p class="eyebrow green">03 / Советник AI</p><h2 id="advisor-title">Вердикт стратегии</h2><p class="subtitle">Проверьте решения, прежде чем менять город.</p></div><button id="simulate" class="primary-button" type="button" disabled><span aria-hidden="true">↗</span> Запустить симуляцию и анализ AI</button></div>
       <div class="terminal"><div class="terminal-heading"><span id="protocol-status">● Аналитический протокол</span><span>Анализ выбранного сценария</span></div><div id="verdict" aria-live="polite" aria-atomic="true"></div></div>
+      <div class="report-actions">
+        <button id="export-report" class="filter" type="button" disabled aria-describedby="report-help">Скачать отчёт (PDF)</button>
+        <p id="report-help" class="fine-print">После расчёта откройте отчёт и выберите «Сохранить как PDF» в окне печати. Если AI недоступен, можно сохранить результаты без анализа.</p>
+      </div>
+      <p id="report-status" class="fine-print" role="status"></p>
       <button id="retry-analysis" class="text-button" type="button" hidden>Повторить AI-анализ</button>
       <p class="fine-print">Синтетические данные учебного симулятора. Расчёт показывает результат условной модели, а не прогноз реального города. Изменение решений сбрасывает результат и анализ.</p>
     </section>
@@ -66,5 +71,6 @@
     <footer><span>Астана / Лаборатория городских решений</span><span>14 мер · 5 районов · Ваш выбор</span></footer>
     <noscript><p class="alert-legend">Включите JavaScript в браузере для отображения районов, выбора мер и симуляции.</p></noscript>
   </main>
+  <article id="print-report" class="print-report" aria-label="Отчёт о сценарии"></article>
 </body>
 </html>

@@ -1,6 +1,10 @@
-"""Проверка сайта в установленном Edge: python browser_smoke.py."""
+"""Проверка сайта: Chrome на macOS/Linux, Edge на Windows.
+
+BROWSER_CHANNEL позволяет выбрать другой установленный браузер.
+"""
 import os
 import socket
+import sys
 import threading
 import time
 from pathlib import Path
@@ -27,7 +31,8 @@ def run():
                 time.sleep(0.05)
             assert server.started
             with sync_playwright() as p:
-                browser = p.chromium.launch(channel="msedge", headless=True)
+                channel = os.environ.get("BROWSER_CHANNEL", "msedge" if sys.platform == "win32" else "chrome")
+                browser = p.chromium.launch(channel=channel, headless=True)
                 page = browser.new_page(viewport={"width": 1440, "height": 1000})
                 errors = []
                 page.on("pageerror", lambda error: errors.append(str(error)))
@@ -35,6 +40,7 @@ def run():
                 expect(page.locator(".measure")).to_have_count(14)
                 expect(page.locator(".metric")).to_have_count(50)
                 expect(page.locator("#score")).to_have_text("52.56")
+                expect(page.locator("#export-report")).to_be_disabled()
                 expect(page.locator("#simulate")).to_be_disabled()
                 page.locator('[data-toggle="M1"]').click()
                 expect(page.locator('[data-toggle="M3"]')).to_be_disabled()
@@ -60,6 +66,23 @@ def run():
                 expect(page.locator("#retry-analysis")).to_be_visible()
                 expect(page.locator("#verdict")).to_contain_text("Расчёт сохранён")
                 expect(page.locator("#score-delta")).to_have_text("(+3.99)")
+                # Печатный диалог подменяем, но CSS и PDF проверяем настоящим Chrome.
+                page.evaluate("() => { window.printCalls=0; window.print=()=>{window.printCalls++; window.dispatchEvent(new Event('beforeprint'));}; }")
+                page.locator("#export-report").click()
+                assert page.evaluate("window.printCalls") == 1, (page.evaluate("window.printCalls"), errors, page.locator("#report-status").text_content())
+                report = page.locator("#print-report")
+                expect(report).to_contain_text("56.54")
+                expect(report).to_contain_text("Школа + детсад")
+                expect(report).to_contain_text("AI-анализ не получен")
+                expect(report.locator(".report-district")).to_have_count(5)
+                expect(report.locator(".report-district tbody tr")).to_have_count(50)
+                page.emulate_media(media="print")
+                expect(report).to_be_visible()
+                expect(page.locator(".dashboard")).not_to_be_visible()
+                pdf = page.pdf(path=str(Path(".venv") / "report-smoke.pdf"), prefer_css_page_size=True)
+                assert pdf.startswith(b"%PDF-") and len(pdf) > 10000
+                page.emulate_media(media="screen")
+                expect(report).not_to_be_visible()
                 page.locator("#save-A").click()
                 expect(page.locator("#comparison-table")).to_contain_text("56.54")
                 # Проверяем безопасное отображение полученного текста и повтор AI.
@@ -68,9 +91,14 @@ def run():
                 page.locator("#retry-analysis").click()
                 expect(page.locator("#verdict")).to_contain_text("Тестовый анализ")
                 expect(page.locator("#verdict img")).to_have_count(0)
+                page.locator("#export-report").click()
+                expect(report).to_contain_text("Тестовый анализ")
+                expect(report.locator("img")).to_have_count(0)
                 page.locator('[data-district="M7"]').select_option(label="Сарыарка")
                 expect(page.locator("#score")).to_have_text("52.56")
                 expect(page.locator("#verdict")).not_to_contain_text("Тестовый анализ")
+                expect(page.locator("#export-report")).to_be_disabled()
+                expect(report).to_be_empty()
                 page.locator("#simulate").click()
                 expect(page.locator("#score")).to_have_text("55.24")
                 expect(page.locator("#verdict")).to_contain_text("Тестовый анализ")
@@ -96,7 +124,7 @@ def run():
                 page.screenshot(path=str(Path(".venv") / "mobile-smoke.png"), full_page=True)
                 assert not errors, errors
                 browser.close()
-                print("Browser checks passed: data, validation, calculation, AI retry, safe text, mobile.")
+                print("Browser checks passed: data, validation, calculation, AI retry, safe text, PDF report, export invalidation, mobile.")
         finally:
             server.should_exit = True
             thread.join(timeout=5)

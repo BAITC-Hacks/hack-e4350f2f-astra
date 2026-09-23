@@ -119,6 +119,9 @@ function renderComparison() {
 function render() {
   if (!state.data) return;
   renderFilters(); renderMeasures(); renderDistricts(); renderComparison();
+  $("export-report").disabled=state.busy || !state.result;
+  $("report-status").textContent="";
+  $("print-report").replaceChildren();
   const selected=getSelected(), errors=validationErrors(selected), limit=state.data.rules.budget_limit;
   const budget=selected.reduce((sum,s) => sum+state.data.measures.find((m) => m.id===s.id).cost,0);
   $("budget-value").textContent=`${budget} / ${limit} у.е.`;
@@ -147,6 +150,46 @@ function render() {
   $("score-explanation").textContent=`Score = 0,7 × средний индекс (${fmt(summary.d_avg)}) + 0,3 × индекс слабейшего района (${fmt(summary.d_min)}) − число критических показателей (${summary.n_crit}).`;
   $("synergies").textContent=state.result ? (state.result.synergies.length ? "Синергии: "+state.result.synergies.map((s) => `${s.measures.join(" + ")} → ${s.district}: ${Object.entries(s.effects).map(([k,v]) => `${k} +${v}`).join(", ")}`).join("; "):"В этом сценарии синергий нет."):"";
 }
+// В отчёт попадает только текущий серверный результат, а не изменяемый выбор.
+function buildReport(result, analysis, indicatorInfo) {
+  const row=(label,before,after) => `<tr><th scope="row">${esc(label)}</th><td>${fmt(before)}</td><td>${fmt(after)}</td><td>${signed(after-before)}</td></tr>`;
+  const tableHead="<thead><tr><th scope=\"col\">Показатель</th><th scope=\"col\">До</th><th scope=\"col\">После</th><th scope=\"col\">Изменение</th></tr></thead>";
+  const analysisHTML=analysis ? analysis.split("\n").filter(line=>line.trim()).map(line=>line.startsWith("### ")
+    ? `<h3>${esc(line.slice(4))}</h3>` : `<p>${esc(line)}</p>`).join("")
+    : "<p>AI-анализ не получен. В отчёте приведены только результаты математической модели.</p>";
+  return `<header><p class="report-kicker">Астана · Городской симулятор</p><h1>Аким на 5 часов</h1><p>Отчёт по текущему сценарию · Горизонт: 8 кварталов</p></header>
+    <h2>Результат стратегии</h2>
+    <p><strong>Бюджет:</strong> ${esc(result.budget.spent)} / ${esc(result.budget.limit)} у.е. · <strong>Остаток:</strong> ${esc(result.budget.remaining)} у.е.</p>
+    <table>${tableHead}<tbody>${row("Astana Quality of Life Score",result.score_before,result.score_after)}
+      ${row("Средний индекс города",result.summary_before.d_avg,result.summary_after.d_avg)}
+      ${row("Индекс слабейшего района",result.summary_before.d_min,result.summary_after.d_min)}
+      ${row("Критических показателей (ниже 40)",result.summary_before.n_crit,result.summary_after.n_crit)}</tbody></table>
+    <p class="report-note">Score = 0,7 × средний индекс + 0,3 × индекс слабейшего района − число критических показателей. Отображаемые значения округлены до двух знаков.</p>
+    <h2>Выбранные решения</h2><table><thead><tr><th scope="col">Мера</th><th scope="col">Район</th><th scope="col">Стоимость, у.е.</th><th scope="col">Задержка, кв.</th></tr></thead><tbody>
+    ${result.selected_measures.map(m=>`<tr><th scope="row">${esc(m.id)} · ${esc(m.name)}</th><td>${esc(m.district || "Весь город")}</td><td>${esc(m.cost)}</td><td>${esc(m.lag)}</td></tr>`).join("")}</tbody></table>
+    <h2>Синергии</h2>${result.synergies.length ? `<ul>${result.synergies.map(s=>`<li>${esc(s.measures.join(" + "))} — ${esc(s.district)}: ${Object.entries(s.effects).map(([k,v])=>`${esc(k)} ${signed(v)}`).join(", ")}</li>`).join("")}</ul>` : "<p>В этом сценарии синергий нет.</p>"}
+    <section class="report-analysis"><h2>Вердикт AI</h2>${analysisHTML}</section>
+    <h2>Индексы районов</h2><table>${tableHead}<tbody>${Object.entries(result.districts).map(([name,d])=>row(name,d.d_before,d.d_after)).join("")}</tbody></table>
+    <h2>Показатели районов</h2>${Object.entries(result.districts).map(([name,d])=>`<section class="report-district"><h3>${esc(name)} · доля населения ${Math.round(d.population_share*100)}%</h3><table>${tableHead}<tbody>${Object.entries(d.after).map(([k,v])=>row(`${k} · ${indicatorInfo[k]?.label || k}${v<40 ? " — КРИТИЧЕСКИЙ" : ""}`,d.before[k],v)).join("")}</tbody></table></section>`).join("")}
+    <footer>Синтетические данные учебного симулятора. Результаты условной модели не являются прогнозом реального города.</footer>`;
+}
+function prepareReport() {
+  $("print-report").innerHTML=state.result && !state.busy
+    ? buildReport(state.result,state.analysis,state.result.indicator_info || state.data.indicator_info)
+    : "<h1>Отчёт пока недоступен</h1><p>Дождитесь завершения расчёта текущего сценария, затем повторите экспорт.</p>";
+}
+window.addEventListener("beforeprint",prepareReport);
+$("export-report").addEventListener("click",()=> {
+  if (state.busy || !state.result) return;
+  prepareReport();
+  try {
+    window.print();
+    $("report-status").textContent="Для сохранения файла выберите «Сохранить как PDF» в окне печати.";
+  } catch (_) {
+    $("report-status").textContent="Не удалось открыть окно печати. Используйте меню браузера «Печать» (Cmd+P на Mac или Ctrl+P).";
+  }
+});
+
 async function analyze() {
   state.analysisError="";
   try { state.analysis=(await api("/api/analyze",{selected_measures:getSelected()})).analysis; }
