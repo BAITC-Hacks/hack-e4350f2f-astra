@@ -66,6 +66,9 @@ def run():
                 expect(page.locator("#retry-analysis")).to_be_visible()
                 expect(page.locator("#verdict")).to_contain_text("Расчёт сохранён")
                 expect(page.locator("#score-delta")).to_have_text("(+3.99)")
+                page.reload()
+                expect(page.locator("#score")).to_have_text("56.54")
+                expect(page.locator("#retry-analysis")).to_be_visible()
                 # Печатный диалог подменяем, но CSS и PDF проверяем настоящим Chrome.
                 page.evaluate("() => { window.printCalls=0; window.print=()=>{window.printCalls++; window.dispatchEvent(new Event('beforeprint'));}; }")
                 page.locator("#export-report").click()
@@ -103,6 +106,11 @@ def run():
                 expect(page.locator("#score")).to_have_text("55.24")
                 expect(page.locator("#verdict")).to_contain_text("Тестовый анализ")
                 page.locator("#save-B").click()
+                page.reload()
+                expect(page.locator("#score")).to_have_text("55.24")
+                expect(page.locator("#verdict")).to_contain_text("Тестовый анализ")
+                expect(page.locator("#decision-count")).to_have_text("5")
+                expect(page.locator("#comparison-measures details")).to_contain_text("Тестовый анализ")
                 expect(page.locator("#comparison-note")).to_contain_text("выше сценарий A на 1.30")
                 expect(page.locator("#comparison-note")).to_contain_text("Нура")
                 expect(page.locator("#comparison-table")).to_contain_text("55.24")
@@ -112,16 +120,22 @@ def run():
                 exported = json.loads(Path(downloaded.value.path()).read_text(encoding="utf-8"))
                 assert abs(exported["scenarios"]["A"]["result"]["score_after"] - 56.54307) < 1e-8
                 assert abs(exported["scenarios"]["B"]["result"]["score_after"] - 55.24387) < 1e-8
+                assert "Тестовый анализ" in exported["scenarios"]["B"]["analysis"]
                 page.locator(".comparison").screenshot(path=str(Path(".venv") / "comparison-smoke.png"))
                 page.locator("#reset").click()
                 expect(page.locator("#save-A")).to_be_disabled()
                 expect(page.locator("#comparison-table")).to_contain_text("56.54")
+                page.reload()
+                expect(page.locator("#comparison-table")).to_contain_text("56.54")
+                expect(page.locator("#decision-count")).to_have_text("0")
                 page.set_viewport_size({"width": 390, "height": 844})
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 page.locator("#clear-scenarios").click()
                 expect(page.locator("#export-scenarios")).to_be_disabled()
+                page.reload()
+                expect(page.locator("#export-scenarios")).to_be_disabled()
                 page.screenshot(path=str(Path(".venv") / "mobile-smoke.png"), full_page=True)
-                # Выбор, район и категория переживают перезагрузку; расчёт — нет.
+                # Новый выбор без расчёта, район и категория переживают перезагрузку.
                 page.locator("#reference").click()
                 page.locator('[data-district="M7"]').select_option(label="Сарыарка")
                 page.locator('[data-category="Соцсфера"]').click()
@@ -146,6 +160,25 @@ def run():
                 expect(page.locator("#decision-count")).to_have_text("1")
                 expect(page.locator("#error")).to_contain_text("была убрана")
                 expect(page.locator('[data-toggle="M1"]')).to_have_attribute("aria-pressed", "true")
+                # Изменение версии данных сбрасывает результаты, но сохраняет валидный выбор.
+                page.locator("#reference").click()
+                page.locator("#simulate").click()
+                expect(page.locator("#verdict")).to_contain_text("Тестовый анализ")
+                page.locator("#save-A").click()
+                page.evaluate("""() => {
+                    const key='akim-selection-v1', saved=JSON.parse(localStorage.getItem(key));
+                    saved.dataset='old-dataset'; localStorage.setItem(key,JSON.stringify(saved));
+                }""")
+                page.reload()
+                expect(page.locator("#storage-status")).to_contain_text("Данные модели изменились")
+                expect(page.locator("#score")).to_have_text("52.56")
+                expect(page.locator("#decision-count")).to_have_text("5")
+                expect(page.locator("#export-scenarios")).to_be_disabled()
+                page.locator("#delete-saved").click()
+                assert page.evaluate("localStorage.getItem('akim-selection-v1')") is None
+                page.reload()
+                expect(page.locator("#decision-count")).to_have_text("0")
+                expect(page.locator("#score")).to_have_text("52.56")
                 # Отключённый localStorage не должен мешать загрузке и выбору.
                 page.add_init_script("Storage.prototype.getItem=()=>{throw new Error('blocked')}; Storage.prototype.setItem=()=>{throw new Error('blocked')};")
                 page.reload()

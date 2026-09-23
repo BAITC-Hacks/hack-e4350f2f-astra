@@ -7,17 +7,50 @@ const state = { data:null, selected:new Set(), targets:{}, category:"Все", re
   busy:false, analysis:"", error:"", analysisError:"", scenarios:{ A:null, B:null } };
 
 const DRAFT_KEY = "akim-selection-v1";
+// Меняйте версию при изменении формулы/формата результатов.
+const STORAGE_VERSION = 2;
+function datasetStamp() { return JSON.stringify(state.data); }
+function storageNotice(text) { $("storage-status").textContent=text; }
 function saveSelection() {
   if (!state.data) return;
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({version:1,
-      selected:[...state.selected], targets:state.targets, category:state.category}));
-  } catch (_) { /* Запрет или переполнение хранилища не блокирует симулятор. */ }
+    const targets={...state.targets};
+    getSelected().forEach(m=>{ if (m.district) targets[m.id]=m.district; });
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({version:STORAGE_VERSION, dataset:datasetStamp(),
+      selected:[...state.selected], targets, category:state.category,
+      result:state.result, analysis:state.analysis, scenarios:state.scenarios}));
+  } catch (_) { storageNotice("Браузер не разрешил сохранение или место закончилось. Скачайте сценарии в JSON перед закрытием страницы."); }
+}
+function validSavedResult(r) {
+  if (!r || r.status!=="ok" || !Array.isArray(r.selected_measures) ||
+      r.selected_measures.length!==5 || new Set(r.selected_measures.map(m=>m?.id)).size!==5) return false;
+  for (const m of r.selected_measures) {
+    const spec=state.data.measures.find(x=>x.id===m?.id);
+    if (!spec || (spec.scope==="Район" ? !Object.hasOwn(state.data.districts,m.district) : m.district!=null)) return false;
+  }
+  if (validationErrors(r.selected_measures).length) return false;
+  if (![r.score_before,r.score_after,r.score_delta,r.budget?.spent,r.budget?.limit,r.budget?.remaining].every(Number.isFinite)) return false;
+  for (const summary of [r.summary_before,r.summary_after])
+    if (![summary?.score,summary?.d_avg,summary?.d_min,summary?.n_crit].every(Number.isFinite)) return false;
+  if (!r.districts || Object.keys(r.districts).length!==5 || !Array.isArray(r.synergies)) return false;
+  for (const name of Object.keys(state.data.districts)) {
+    const d=r.districts[name];
+    if (![d?.d_before,d?.d_after,d?.d_delta,d?.population_share].every(Number.isFinite)) return false;
+    for (const field of ["before","after","deltas"]) {
+      if (!d[field] || Object.keys(d[field]).length!==10 ||
+          !Object.keys(state.data.weights).every(k=>Number.isFinite(d[field][k]))) return false;
+    }
+  }
+  return r.synergies.every(s=>Array.isArray(s?.measures) && s.measures.every(m=>typeof m==="string") &&
+    Object.hasOwn(state.data.districts,s.district) && s.effects && Object.values(s.effects).every(Number.isFinite));
+}
+function selectionSignature(measures) {
+  return JSON.stringify(measures.map(m=>[m.id,m.district || null]).sort((a,b)=>a[0].localeCompare(b[0])));
 }
 function restoreSelection() {
   try {
     const saved=JSON.parse(localStorage.getItem(DRAFT_KEY));
-    if (!saved || saved.version!==1 || !Array.isArray(saved.selected)) return;
+    if (!saved || ![1,STORAGE_VERSION].includes(saved.version) || !Array.isArray(saved.selected)) return;
     const categories=["Все",...state.data.measures.map(m=>m.direction)];
     state.category=categories.includes(saved.category) ? saved.category : "Все";
     const targets=saved.targets && typeof saved.targets === "object" ? saved.targets : {};
@@ -37,7 +70,19 @@ function restoreSelection() {
     }
     if (state.selected.size!==saved.selected.length)
       state.error="Часть сохранённых мер больше не соответствует правилам и была убрана. Проверьте выбор.";
-  } catch (_) { /* Повреждённый или недоступный черновик не мешает загрузке. */ }
+    if (saved.version===STORAGE_VERSION && saved.dataset===datasetStamp()) {
+      if (validSavedResult(saved.result) && selectionSignature(saved.result.selected_measures)===selectionSignature(getSelected())) {
+        state.result=saved.result;
+        state.analysis=typeof saved.analysis==="string" ? saved.analysis : "";
+        if (!state.analysis) state.analysisError="Расчёт восстановлен. AI-анализ ещё не получен — можно повторить запрос.";
+      }
+      for (const slot of ["A","B"]) {
+        const snapshot=saved.scenarios?.[slot];
+        if (validSavedResult(snapshot?.result)) state.scenarios[slot]={result:snapshot.result,
+          analysis:typeof snapshot.analysis==="string" ? snapshot.analysis : null};
+      }
+    } else if (saved.version===STORAGE_VERSION) storageNotice("Данные модели изменились: выбор проверен, старые расчёты и анализы сброшены. Рассчитайте сценарии заново.");
+  } catch (_) { storageNotice("Не удалось восстановить сохранение. Можно продолжить работу и рассчитать сценарий заново."); }
 }
 
 async function api(path, body) {
@@ -142,12 +187,20 @@ function renderComparison() {
     const s=state.scenarios[slot];
     return `<section><h3>Решения ${slot}</h3>${s ? `<ul>${s.result.selected_measures.map((m)=>`<li>${esc(m.id)} · ${esc(m.name || state.data.measures.find(x=>x.id===m.id).name)} — ${esc(m.district || "весь город")}</li>`).join("")}</ul>` : "<p>Сценарий ещё не сохранён.</p>"}</section>`;
   }).join("");
+  for (const [index,slot] of ["A","B"].entries()) {
+    const snapshot=state.scenarios[slot];
+    if (!snapshot?.analysis) continue;
+    const details=document.createElement("details"), title=document.createElement("summary"), text=document.createElement("p");
+    title.textContent=`Сохранённый AI-анализ ${slot}`;
+    text.textContent=snapshot.analysis; text.style.whiteSpace="pre-wrap";
+    details.append(title,text); $("comparison-measures").children[index].append(details);
+  }
   if (A && B) {
     const delta=B.result.score_after-A.result.score_after;
     const higher=Math.abs(delta)<1e-9 ? "Score сценариев одинаков." : `По Score выше сценарий ${delta>0 ? "B":"A"} на ${fmt(Math.abs(delta))} п.`;
     const worse=Object.keys(state.data.districts).filter(d=>B.result.districts[d].d_after<A.result.districts[d].d_after-1e-9);
     $("comparison-note").textContent=higher+" "+(worse.length ? `В B индекс ниже, чем в A, в районах: ${worse.join(", ")}.` : "В B нет районов с индексом ниже, чем в A.");
-  } else $("comparison-note").textContent="Рассчитайте сценарий, сохраните как A, измените решения и сохраните новый результат как B. Сохранённые результаты не меняются при редактировании выбора и доступны до перезагрузки страницы.";
+  } else $("comparison-note").textContent="Рассчитайте сценарий, сохраните как A, измените решения и сохраните новый результат как B. Сценарии сохраняются в этом браузере, в том числе после обновления страницы.";
 }
 
 function render() {
@@ -168,6 +221,7 @@ function render() {
   $("selection-note").textContent=errors.join(" ") || "Пять решений готовы к расчёту.";
   $("reset").hidden=!selected.length; $("reset").disabled=state.busy;
   $("reference").disabled=state.busy;
+  $("delete-saved").disabled=state.busy;
   $("simulate").disabled=state.busy || errors.length>0;
   $("simulate").textContent=state.busy ? "Выполняется запрос…":"Рассчитать и получить AI-анализ";
   $("score").textContent=fmt(state.result?.score_after ?? state.data.baseline.summary.score);
@@ -279,11 +333,18 @@ $("retry-data").addEventListener("click",initialize);
 for (const slot of ["A","B"]) $("save-"+slot).addEventListener("click",()=> {
   if (state.busy || !state.result) return;
   state.scenarios[slot]=structuredClone({result:state.result, analysis:state.analysis || null});
-  renderComparison();
+  saveSelection(); renderComparison();
 });
 $("clear-scenarios").addEventListener("click",()=> {
   if (state.busy) return;
-  state.scenarios={A:null,B:null}; renderComparison();
+  state.scenarios={A:null,B:null}; saveSelection(); renderComparison();
+});
+$("delete-saved").addEventListener("click",()=> {
+  if (state.busy || !state.data) return;
+  state.selected.clear(); state.targets={}; state.category="Все";
+  state.scenarios={A:null,B:null}; invalidate(); render();
+  try { localStorage.removeItem(DRAFT_KEY); storageNotice("Сохранённые данные удалены. Новый выбор будет сохраняться автоматически."); }
+  catch (_) { storageNotice("Браузер не разрешил удалить сохранение. Удалите данные сайта в настройках браузера."); }
 });
 $("export-scenarios").addEventListener("click",()=> {
   if (!state.scenarios.A && !state.scenarios.B) return;
