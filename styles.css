@@ -1,4 +1,13 @@
 @charset "UTF-8";
+.comparison { margin-top:20px; }
+.comparison-actions { display:flex; flex-wrap:wrap; gap:12px; margin:20px 0; }
+.table-scroll { overflow-x:auto; }
+.comparison table { width:100%; border-collapse:collapse; font-size:13px; }
+.comparison th,.comparison td { padding:12px 8px; border-bottom:1px solid #ffffff18; text-align:left; }
+.comparison td { font-family:ui-monospace,monospace; }
+.comparison th { color:#94a3b8; font-weight:500; }
+.comparison-measures { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:20px; margin-top:20px; line-height:1.8; font-size:13px; }
+.comparison-measures h3 { color:#67e8f9; }
 .rules { margin-bottom:20px; line-height:1.8; font-size:13px; }
 .rules summary { cursor:pointer; color:#67e8f9; }
 .rules p { margin-top:12px; }

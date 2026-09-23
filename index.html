@@ -51,6 +51,18 @@
       <button id="retry-analysis" class="text-button" type="button" hidden>Повторить AI-анализ</button>
       <p class="fine-print">Синтетические данные учебного симулятора. Расчёт показывает результат условной модели, а не прогноз реального города. Изменение решений сбрасывает результат и анализ.</p>
     </section>
+    <section class="panel section-panel comparison" aria-labelledby="comparison-title">
+      <p class="eyebrow">04 / Выбор стратегии</p><h2 id="comparison-title">Сравнение сценариев</h2>
+      <p id="comparison-note" class="subtitle" aria-live="polite">Сохраните два рассчитанных сценария для сравнения.</p>
+      <div class="comparison-actions">
+        <button id="save-A" class="filter" type="button" disabled>Сохранить как A</button>
+        <button id="save-B" class="filter" type="button" disabled>Сохранить как B</button>
+        <button id="export-scenarios" class="filter" type="button" disabled>Скачать JSON</button>
+        <button id="clear-scenarios" class="text-button" type="button" disabled>Очистить сравнение</button>
+      </div>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Таблица сравнения сценариев"><table id="comparison-table"></table></div>
+      <div id="comparison-measures" class="comparison-measures"></div>
+    </section>
     <footer><span>Астана / Лаборатория городских решений</span><span>14 мер · 5 районов · Ваш выбор</span></footer>
     <noscript><p class="alert-legend">Включите JavaScript в браузере для отображения районов, выбора мер и симуляции.</p></noscript>
   </main>

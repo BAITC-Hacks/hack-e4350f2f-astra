@@ -4,7 +4,7 @@ const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;"
 const fmt = (n) => Number(n).toFixed(2);
 const signed = (n) => `${n >= 0 ? "+" : ""}${fmt(n)}`;
 const state = { data:null, selected:new Set(), targets:{}, category:"Все", result:null,
-  busy:false, analysis:"", error:"", analysisError:"" };
+  busy:false, analysis:"", error:"", analysisError:"", scenarios:{ A:null, B:null } };
 
 async function api(path, body) {
   const controller = new AbortController();
@@ -88,9 +88,37 @@ function renderAnalysis(text) {
   }
   $("verdict").replaceChildren(fragment);
 }
+
+function renderComparison() {
+  const {A, B}=state.scenarios;
+  for (const slot of ["A", "B"]) {
+    $("save-"+slot).disabled=state.busy || !state.result;
+    $("save-"+slot).textContent=state.scenarios[slot] ? `Заменить сценарий ${slot}` : `Сохранить как ${slot}`;
+  }
+  $("export-scenarios").disabled=!A && !B;
+  $("clear-scenarios").disabled=state.busy || (!A && !B);
+  const cells=(label, get, format=fmt) => `<tr><th scope="row">${esc(label)}</th>${[A,B].map((s) => `<td>${s ? esc(format(get(s.result))) : "—"}</td>`).join("")}</tr>`;
+  const weakest=(r) => Object.entries(r.districts).filter(([,d]) => Math.abs(d.d_after-r.summary_after.d_min)<1e-9).map(([name]) => name).join(", ");
+  $("comparison-table").innerHTML=`<thead><tr><th scope="col">Показатель</th><th scope="col">Сценарий A</th><th scope="col">Сценарий B</th></tr></thead><tbody>`+
+    cells("Потрачено, у.е.",r=>r.budget.spent)+cells("Score",r=>r.score_after)+
+    cells("Прирост Score",r=>r.score_delta,signed)+cells("Критических показателей ↓",r=>r.summary_after.n_crit,String)+
+    cells("Индекс слабейшего района ↑",r=>r.summary_after.d_min)+cells("Слабейший район",weakest,String)+
+    Object.keys(state.data.districts).map((d)=>cells(`Индекс: ${d}`,r=>r.districts[d].d_after)).join("")+"</tbody>";
+  $("comparison-measures").innerHTML=["A","B"].map((slot)=> {
+    const s=state.scenarios[slot];
+    return `<section><h3>Решения ${slot}</h3>${s ? `<ul>${s.result.selected_measures.map((m)=>`<li>${esc(m.id)} · ${esc(m.name || state.data.measures.find(x=>x.id===m.id).name)} — ${esc(m.district || "весь город")}</li>`).join("")}</ul>` : "<p>Сценарий ещё не сохранён.</p>"}</section>`;
+  }).join("");
+  if (A && B) {
+    const delta=B.result.score_after-A.result.score_after;
+    const higher=Math.abs(delta)<1e-9 ? "Score сценариев одинаков." : `По Score выше сценарий ${delta>0 ? "B":"A"} на ${fmt(Math.abs(delta))} п.`;
+    const worse=Object.keys(state.data.districts).filter(d=>B.result.districts[d].d_after<A.result.districts[d].d_after-1e-9);
+    $("comparison-note").textContent=higher+" "+(worse.length ? `В B индекс ниже, чем в A, в районах: ${worse.join(", ")}.` : "В B нет районов с индексом ниже, чем в A.");
+  } else $("comparison-note").textContent="Рассчитайте сценарий, сохраните как A, измените решения и сохраните новый результат как B. Сохранённые результаты не меняются при редактировании выбора и доступны до перезагрузки страницы.";
+}
+
 function render() {
   if (!state.data) return;
-  renderFilters(); renderMeasures(); renderDistricts();
+  renderFilters(); renderMeasures(); renderDistricts(); renderComparison();
   const selected=getSelected(), errors=validationErrors(selected), limit=state.data.rules.budget_limit;
   const budget=selected.reduce((sum,s) => sum+state.data.measures.find((m) => m.id===s.id).cost,0);
   $("budget-value").textContent=`${budget} / ${limit} у.е.`;
@@ -170,4 +198,20 @@ async function initialize() {
   } catch(e) { $("error").hidden=false; $("error").textContent=e.message; $("retry-data").hidden=false; }
 }
 $("retry-data").addEventListener("click",initialize);
+for (const slot of ["A","B"]) $("save-"+slot).addEventListener("click",()=> {
+  if (state.busy || !state.result) return;
+  state.scenarios[slot]=structuredClone({result:state.result, analysis:state.analysis || null});
+  renderComparison();
+});
+$("clear-scenarios").addEventListener("click",()=> {
+  if (state.busy) return;
+  state.scenarios={A:null,B:null}; renderComparison();
+});
+$("export-scenarios").addEventListener("click",()=> {
+  if (!state.scenarios.A && !state.scenarios.B) return;
+  const blob=new Blob([JSON.stringify({format_version:1, dataset:"akim-5-hours", scenarios:state.scenarios},null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob), link=document.createElement("a");
+  link.href=url; link.download="akim-scenarios.json"; link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
 initialize();

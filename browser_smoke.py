@@ -60,6 +60,8 @@ def run():
                 expect(page.locator("#retry-analysis")).to_be_visible()
                 expect(page.locator("#verdict")).to_contain_text("Расчёт сохранён")
                 expect(page.locator("#score-delta")).to_have_text("(+3.99)")
+                page.locator("#save-A").click()
+                expect(page.locator("#comparison-table")).to_contain_text("56.54")
                 # Проверяем безопасное отображение полученного текста и повтор AI.
                 page.route("**/api/analyze", lambda route: route.fulfill(json={
                     "status": "ok", "analysis": "### Оценка\n<img src=x onerror=alert(1)>\nТестовый анализ"}))
@@ -72,8 +74,25 @@ def run():
                 page.locator("#simulate").click()
                 expect(page.locator("#score")).to_have_text("55.24")
                 expect(page.locator("#verdict")).to_contain_text("Тестовый анализ")
+                page.locator("#save-B").click()
+                expect(page.locator("#comparison-note")).to_contain_text("выше сценарий A на 1.30")
+                expect(page.locator("#comparison-note")).to_contain_text("Нура")
+                expect(page.locator("#comparison-table")).to_contain_text("55.24")
+                with page.expect_download() as downloaded:
+                    page.locator("#export-scenarios").click()
+                import json
+                exported = json.loads(Path(downloaded.value.path()).read_text(encoding="utf-8"))
+                assert abs(exported["scenarios"]["A"]["result"]["score_after"] - 56.54307) < 1e-8
+                assert abs(exported["scenarios"]["B"]["result"]["score_after"] - 55.24387) < 1e-8
+                Path("docs").mkdir(exist_ok=True)
+                page.locator(".comparison").screenshot(path="docs/comparison.png")
+                page.locator("#reset").click()
+                expect(page.locator("#save-A")).to_be_disabled()
+                expect(page.locator("#comparison-table")).to_contain_text("56.54")
                 page.set_viewport_size({"width": 390, "height": 844})
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                page.locator("#clear-scenarios").click()
+                expect(page.locator("#export-scenarios")).to_be_disabled()
                 page.screenshot(path=str(Path(".venv") / "mobile-smoke.png"), full_page=True)
                 assert not errors, errors
                 browser.close()
