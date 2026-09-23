@@ -17,7 +17,7 @@ from engine import INITIAL, MEASURES, POPULATION, SYNERGIES, WEIGHTS
 from engine import ValidationError, baseline_metrics, simulate
 
 
-app = FastAPI(title="Симулятор города", version="1.0.0")
+app = FastAPI(title="QalaAI: Цифровой советник акима", version="1.0.0")
 PROJECT_DIR = Path(__file__).resolve().parent
 
 

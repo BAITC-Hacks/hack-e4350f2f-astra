@@ -7,6 +7,44 @@ const state = { data:null, selected:new Set(), targets:{}, category:"Все", re
   busy:false, analysis:"", error:"", analysisError:"", scenarios:{ A:null, B:null } };
 
 const DRAFT_KEY = "akim-selection-v1";
+let activeView="decisions";
+let activeDistrict="Нура";
+const VIEW_HINTS={
+  decisions:["01 / Соберите пакет решений","Сначала посмотрите рейтинги и показатели районов во вкладке «Районы и результат»: они помогут выбрать категории, где улучшения нужнее всего. Затем добавьте пять инициатив кнопкой «+» и назначьте районы. Бюджет — до 100 у.е.","results","Посмотреть районы →"],
+  results:["02 / Изучите изменения","Нажмите на название района. Сравните показатели до и после расчёта; значения ниже 40 требуют внимания.","advisor","К объяснению AI →"],
+  advisor:["03 / Разберитесь в компромиссах","Здесь появятся объяснение стратегии и рекомендации. Если AI недоступен, повторите запрос. Отчёт можно сохранить в PDF.","compare","Сравнить варианты →"],
+  compare:["04 / Найдите лучший сценарий","Сохраните расчёт как A. Вернитесь к решениям, измените пакет, рассчитайте снова и сохраните как B. Оба сценария сохранятся в браузере.","decisions","Изменить решения →"],
+  help:["Короткий маршрут","Решения → расчёт → районы → AI-советник → сравнение. Категории только фильтруют список; сам расчёт запускается кнопкой внизу.","decisions","Начать выбор →"]
+};
+function renderHint() {
+  const [title,text,,label]=VIEW_HINTS[activeView];
+  $("hint-title").textContent=title;
+  $("hint-text").textContent=activeView==="results" && !state.result ? "Сейчас показано исходное состояние города. Переключайте районы, изучайте их индексы и слабые показатели — особенно значения ниже 40. Это поможет определить приоритетные категории. Затем вернитесь во вкладку «Решения»." : text;
+  $("hint-next").textContent=label;
+}
+$("hint-next").addEventListener("click",()=>showView(VIEW_HINTS[activeView][2],true));
+function showView(view, focus=false) {
+  activeView=view;
+  document.querySelectorAll("[data-panel]").forEach(p=>{p.hidden=p.dataset.panel!==view;});
+  document.querySelectorAll("[data-view]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.view===view)));
+  renderHint();
+  if (focus) {
+    const panel=document.querySelector(`[data-panel="${view}"]`);
+    panel.setAttribute("tabindex","-1"); panel.focus({preventScroll:true});
+    document.querySelector(".view-nav").scrollIntoView({block:"start",behavior:"instant"});
+  }
+}
+document.querySelector(".view-nav").addEventListener("click",e=>{
+  const button=e.target.closest("[data-view]"); if (button) showView(button.dataset.view,true);
+});
+document.querySelector(".view-nav").addEventListener("keydown",e=>{
+  if (!["ArrowLeft","ArrowRight","Home","End"].includes(e.key)) return;
+  const buttons=[...document.querySelectorAll("[data-view]")], index=buttons.indexOf(document.activeElement);
+  if (index<0) return;
+  e.preventDefault();
+  const next=e.key==="Home" ? 0 : e.key==="End" ? buttons.length-1 : (index+(e.key==="ArrowRight" ? 1 : -1)+buttons.length)%buttons.length;
+  buttons[next].focus(); showView(buttons[next].dataset.view);
+});
 // Меняйте версию при изменении формулы/формата результатов.
 const STORAGE_VERSION = 2;
 function datasetStamp() { return JSON.stringify(state.data); }
@@ -143,11 +181,12 @@ function renderMeasures() {
   }).join("");
 }
 function renderDistricts() {
+  $("district-picker").innerHTML=Object.keys(state.data.districts).map(name=>`<button class="filter ${name===activeDistrict ? "active":""}" type="button" data-pick-district="${esc(name)}" aria-pressed="${name===activeDistrict}">${esc(name)}</button>`).join("");
   $("district-state").textContent=state.result ? "После 8 кварталов":"Исходные данные";
   $("districts").innerHTML=Object.entries(state.data.districts).map(([name,d]) => {
     const result=state.result?.districts[name], values=result?.after || d.indicators;
     const critical=Object.values(values).some((v) => v<40);
-    return `<article class="district ${critical ? "critical":""}"><div class="district-heading"><h3>${esc(name)}</h3><span class="zone">${critical ? "ВНИМАНИЕ":"НОРМА"}</span></div>
+    return `<article ${name!==activeDistrict ? "hidden":""} class="district ${critical ? "critical":""}"><div class="district-heading"><h3>${esc(name)}</h3><span class="zone">${critical ? "ВНИМАНИЕ":"НОРМА"}</span></div>
       <p class="fine-print">Население: ${Math.round(d.population_share*100)}% · Индекс: ${fmt(state.data.baseline.districts[name])}${result ? ` → ${fmt(result.d_after)}`:""}</p>
       <div class="indicators">${Object.entries(values).map(([k,v]) => {
         const info=state.data.indicator_info[k], delta=result?.deltas[k] || 0;
@@ -205,6 +244,7 @@ function renderComparison() {
 
 function render() {
   if (!state.data) return;
+  renderHint();
   saveSelection();
   renderFilters(); renderMeasures(); renderDistricts(); renderComparison();
   $("export-report").disabled=state.busy || !state.result;
@@ -212,6 +252,9 @@ function render() {
   $("print-report").replaceChildren();
   const selected=getSelected(), errors=validationErrors(selected), limit=state.data.rules.budget_limit;
   const budget=selected.reduce((sum,s) => sum+state.data.measures.find((m) => m.id===s.id).cost,0);
+  $("selected-preview").innerHTML=selected.length ? selected.map(s=>`<button type="button" data-remove="${s.id}" ${state.busy ? "disabled":""} title="Убрать ${esc(s.id)}" aria-label="Убрать ${esc(state.data.measures.find(m=>m.id===s.id).name)}">${esc(s.id)} · ${esc(s.district || "Весь город")} <span aria-hidden="true">×</span></button>`).join("") : "<span>Ваш пакет пока пуст. Начните с категории или загрузите пример.</span>";
+  $("dock-summary").textContent=`${selected.length} из 5 решений · ${budget} / ${limit} у.е.`;
+  $("dock-note").textContent=state.busy ? "Расчёт и AI-анализ выполняются…" : errors.join(" ") || (state.result ? "Результат готов. Откройте районы, AI-советника или сравнение." : "Всё готово. Посмотрите, как изменится город.");
   $("budget-value").textContent=`${budget} / ${limit} у.е.`;
   $("budget-fill").style.width=`${budget/limit*100}%`;
   $("budget-bar").setAttribute("aria-valuenow",budget);
@@ -246,7 +289,7 @@ function buildReport(result, analysis, indicatorInfo) {
   const analysisHTML=analysis ? analysis.split("\n").filter(line=>line.trim()).map(line=>line.startsWith("### ")
     ? `<h3>${esc(line.slice(4))}</h3>` : `<p>${esc(line)}</p>`).join("")
     : "<p>AI-анализ не получен. В отчёте приведены только результаты математической модели.</p>";
-  return `<header><p class="report-kicker">Астана · Городской симулятор</p><h1>Аким на 5 часов</h1><p>Отчёт по текущему сценарию · Горизонт: 8 кварталов</p></header>
+  return `<header><p class="report-kicker">Астана · Городской симулятор</p><h1>QalaAI: Цифровой советник акима</h1><p>Отчёт по текущему сценарию · Горизонт: 8 кварталов</p></header>
     <h2>Результат стратегии</h2>
     <p><strong>Бюджет:</strong> ${esc(result.budget.spent)} / ${esc(result.budget.limit)} у.е. · <strong>Остаток:</strong> ${esc(result.budget.remaining)} у.е.</p>
     <table>${tableHead}<tbody>${row("Astana Quality of Life Score",result.score_before,result.score_after)}
@@ -314,7 +357,7 @@ $("reference").addEventListener("click",() => {
 $("simulate").addEventListener("click",async () => {
   if (state.busy || !state.data || validationErrors(getSelected()).length) return;
   invalidate(); state.busy=true; render();
-  try { state.result=await api("/api/simulate",{selected_measures:getSelected()}); render(); await analyze(); }
+  try { state.result=await api("/api/simulate",{selected_measures:getSelected()}); render(); showView("results",true); await analyze(); }
   catch(e) { state.error=e.message; }
   finally { state.busy=false; render(); }
 });
@@ -330,6 +373,14 @@ async function initialize() {
   } catch(e) { $("error").hidden=false; $("error").textContent=e.message; $("retry-data").hidden=false; }
 }
 $("retry-data").addEventListener("click",initialize);
+$("district-picker").addEventListener("click",e=>{
+  const b=e.target.closest("[data-pick-district]"); if (!b) return;
+  activeDistrict=b.dataset.pickDistrict; renderDistricts();
+});
+$("selected-preview").addEventListener("click",e=>{
+  const b=e.target.closest("[data-remove]"); if (!b || state.busy) return;
+  state.selected.delete(b.dataset.remove); invalidate(); render();
+});
 for (const slot of ["A","B"]) $("save-"+slot).addEventListener("click",()=> {
   if (state.busy || !state.result) return;
   state.scenarios[slot]=structuredClone({result:state.result, analysis:state.analysis || null});
