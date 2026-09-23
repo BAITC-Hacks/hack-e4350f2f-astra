@@ -176,6 +176,10 @@ footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; 
   .online { color:#126453; }
   .online::before { background:#d86731; box-shadow:none; }
   .hero { align-items:center; }
+  .hero > div:first-child { flex:1 1 460px; min-width:0; }
+  .hero-photo { flex:0 1 38%; height:154px; min-width:240px; border-radius:12px 46px 12px 12px;
+    background:linear-gradient(90deg,#f3f2ea 0%,#f3f2ea22 28%,transparent 65%),linear-gradient(0deg,#f3f2ea55,transparent 40%),url('/img/ast.jpg') center 53% / cover no-repeat;
+    box-shadow:inset 0 0 0 1px #b6bdae40; }
   h1 { font-family:Georgia,"Times New Roman",serif; font-size:clamp(30px,3.8vw,49px); font-weight:400; letter-spacing:-.055em; }
   h1 span { color:#176b55; font-style:italic; }
   .hero .subtitle { margin-top:8px; font-size:13px; }
@@ -279,6 +283,9 @@ footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; 
     .topline>span:last-child { display:none; }
     h1 { font-size:28px; max-width:330px; }
     .city-mark { display:none; }
+    .hero { gap:12px; }
+    .hero > div:first-child { flex-basis:100%; }
+    .hero-photo { flex-basis:100%; min-width:0; height:72px; border-radius:8px 24px 8px 8px; background-position:center 55%; }
     .navigation-hint { flex-direction:column; align-items:stretch; gap:10px; padding:12px; }
     .navigation-hint button { align-self:flex-start; }
     .hero .subtitle { font-size:12px; }

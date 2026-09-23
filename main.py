@@ -36,6 +36,11 @@ def frontend_styles():
     return FileResponse(PROJECT_DIR / "styles.css", media_type="text/css")
 
 
+@app.get("/img/ast.jpg", include_in_schema=False)
+def city_photo():
+    return FileResponse(PROJECT_DIR / "img" / "ast.jpg", media_type="image/jpeg")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?",
