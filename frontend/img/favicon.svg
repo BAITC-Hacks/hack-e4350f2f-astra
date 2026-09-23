@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">QalaAI</title>
+  <rect width="64" height="64" rx="16" fill="#1d3d32"/>
+  <path fill="#f3f2ea" fill-rule="evenodd" d="M31 10a21 21 0 1 0 0 42 21 21 0 0 0 0-42Zm0 9a12 12 0 1 1 0 24 12 12 0 0 1 0-24Z"/>
+  <path d="m37 38 14 14" fill="none" stroke="#d86731" stroke-width="9" stroke-linecap="round"/>
+</svg>

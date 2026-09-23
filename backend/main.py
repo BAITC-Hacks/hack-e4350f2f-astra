@@ -41,6 +41,11 @@ def city_photo():
     return FileResponse(FRONTEND_DIR / "img" / "ast.jpg", media_type="image/jpeg")
 
 
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon():
+    return FileResponse(FRONTEND_DIR / "img" / "favicon.svg", media_type="image/svg+xml")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?",
