@@ -12,10 +12,14 @@ from pathlib import Path
 import uvicorn
 from playwright.sync_api import sync_playwright, expect
 
-from main import app
+from backend.main import app
+
+
+ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"
 
 
 def run():
+    ARTIFACTS_DIR.mkdir(exist_ok=True)
     # Проверка не использует настоящий ключ и не расходует квоту.
     os.environ.pop("OPENAI_API_KEY", None)
     os.environ.pop("OPENAI_MODEL", None)
@@ -114,7 +118,7 @@ def run():
                 page.emulate_media(media="print")
                 expect(report).to_be_visible()
                 expect(page.locator(".dashboard")).not_to_be_visible()
-                pdf = page.pdf(path=str(Path(".venv") / "report-smoke.pdf"), prefer_css_page_size=True)
+                pdf = page.pdf(path=str(ARTIFACTS_DIR / "report-smoke.pdf"), prefer_css_page_size=True)
                 assert pdf.startswith(b"%PDF-") and len(pdf) > 10000
                 page.emulate_media(media="screen")
                 expect(report).not_to_be_visible()
@@ -154,7 +158,7 @@ def run():
                 assert abs(exported["scenarios"]["A"]["result"]["score_after"] - 56.54307) < 1e-8
                 assert abs(exported["scenarios"]["B"]["result"]["score_after"] - 55.24387) < 1e-8
                 assert "Тестовый анализ" in exported["scenarios"]["B"]["analysis"]
-                page.locator(".comparison").screenshot(path=str(Path(".venv") / "comparison-smoke.png"))
+                page.locator(".comparison").screenshot(path=str(ARTIFACTS_DIR / "comparison-smoke.png"))
                 click("#reset")
                 expect(page.locator("#save-A")).to_be_disabled()
                 expect(page.locator("#comparison-table")).to_contain_text("56.54")
@@ -167,7 +171,7 @@ def run():
                 expect(page.locator("#export-scenarios")).to_be_disabled()
                 page.reload()
                 expect(page.locator("#export-scenarios")).to_be_disabled()
-                page.screenshot(path=str(Path(".venv") / "mobile-smoke.png"), full_page=True)
+                page.screenshot(path=str(ARTIFACTS_DIR / "mobile-smoke.png"), full_page=True)
                 # Новый выбор без расчёта, район и категория переживают перезагрузку.
                 click("#reference")
                 click('[data-view="decisions"]')
@@ -262,9 +266,9 @@ def run():
                 page.set_viewport_size({"width": 1440, "height": 1000})
                 click('[data-view="decisions"]')
                 page.evaluate('window.scrollTo(0,0)')
-                page.screenshot(path=str(Path('.venv') / 'ui-desktop.png'))
+                page.screenshot(path=str(ARTIFACTS_DIR / 'ui-desktop.png'))
                 page.set_viewport_size({"width": 390, "height": 844})
-                page.screenshot(path=str(Path('.venv') / 'ui-mobile.png'))
+                page.screenshot(path=str(ARTIFACTS_DIR / 'ui-mobile.png'))
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                 assert not errors, errors
                 browser.close()

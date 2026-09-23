@@ -1,9 +1,11 @@
+import os
 import unittest
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from main import app
-from test_engine import REFERENCE
+from backend.main import app
+from tests.test_engine import REFERENCE
 
 
 class ApiTests(unittest.TestCase):
@@ -28,9 +30,16 @@ class ApiTests(unittest.TestCase):
             self.assertTrue(set(measure["effects"]) <= data["indicator_info"].keys())
 
     def test_frontend_and_private_files(self):
-        for path in ("/", "/app.js", "/styles.css"):
-            self.assertEqual(self.client.get(path).status_code, 200)
-        for path in ("/main.py", "/.env", "/.git/config"):
+        # Static assets must resolve even when the server's working directory changes.
+        previous = os.getcwd()
+        try:
+            os.chdir(Path(__file__).resolve().parent)
+            for path in ("/", "/app.js", "/styles.css", "/img/ast.jpg"):
+                self.assertEqual(self.client.get(path).status_code, 200)
+        finally:
+            os.chdir(previous)
+        for path in ("/main.py", "/backend/main.py", "/tests/test_main.py",
+                     "/requirements.txt", "/.env", "/.git/config"):
             self.assertEqual(self.client.get(path).status_code, 404)
 
     def test_different_decisions_change_score(self):

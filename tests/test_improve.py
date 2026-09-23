@@ -3,9 +3,9 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from engine import ValidationError, improve, simulate
-from main import app
-from test_engine import REFERENCE
+from backend.engine import ValidationError, improve, simulate
+from backend.main import app
+from tests.test_engine import REFERENCE
 
 
 class ImprovementTests(unittest.TestCase):

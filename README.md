@@ -106,17 +106,17 @@
 Версия SDK в файле зависимостей не является названием модели.
 
 Основной сайт не требует React, Tailwind, Node.js или сборки фронтенда.
-Node.js используется только для необязательной проверки синтаксиса `app.js`.
+Node.js используется только для необязательной проверки синтаксиса `frontend/app.js`.
 
 ## 5. Архитектура
 
 ```mermaid
 flowchart TD
-    UI[Браузер: HTML / CSS / JavaScript] -->|GET /api/data| API[FastAPI: main.py]
+    UI[Браузер: HTML / CSS / JavaScript] -->|GET /api/data| API[FastAPI: backend/main.py]
     UI -->|POST /api/simulate| API
     UI -->|POST /api/analyze| API
-    API --> Engine[engine.py: проверка правил и расчёт]
-    API --> Catalog[catalog.py: названия и пояснения]
+    API --> Engine[backend/engine.py: проверка правил и расчёт]
+    API --> Catalog[backend/catalog.py: названия и пояснения]
     API -->|Проверенные факты и системный промпт| AI[OpenAI Responses API]
     AI -->|Текст объяснения| API
     API -->|JSON| UI
@@ -125,24 +125,52 @@ flowchart TD
 ```
 
 Сайт, его CSS/JavaScript, фотографию `/img/ast.jpg` и API обслуживает один процесс FastAPI. Расчёт бюджета и Score выполняется кодом
-в `engine.py` и не зависит от ответа LLM. Перед запросом AI сервер заново рассчитывает
+в `backend/engine.py` и не зависит от ответа LLM. Перед запросом AI сервер заново рассчитывает
 факты по выбранным мерам: присланные клиентом Score, стоимость и другие результаты игнорируются.
 Названия мер и расшифровки показателей также поступают из серверного каталога.
 
 | Файл | Назначение |
 | --- | --- |
-| [`index.html`](index.html) | Структура интерфейса |
-| [`styles.css`](styles.css) | Оформление, адаптация, стили печатного отчёта |
-| [`img/ast.jpg`](img/ast.jpg) | Локальная фотография Астаны для шапки; сервер выдаёт её по `/img/ast.jpg` |
-| [`app.js`](app.js) | Выбор мер, запросы API, отображение, сохранение и экспорт |
-| [`engine.py`](engine.py) | Исходные числа, эффекты, правила и формула Score |
-| [`catalog.py`](catalog.py) | Названия мероприятий и смысл показателей |
-| [`main.py`](main.py) | FastAPI, схемы запросов, раздача сайта, интеграция AI |
+| [`frontend/index.html`](frontend/index.html) | Структура интерфейса |
+| [`frontend/styles.css`](frontend/styles.css) | Оформление, адаптация, стили печатного отчёта |
+| [`frontend/img/ast.jpg`](frontend/img/ast.jpg) | Локальная фотография Астаны для шапки; сервер выдаёт её по `/img/ast.jpg` |
+| [`frontend/app.js`](frontend/app.js) | Выбор мер, запросы API, отображение, сохранение и экспорт |
+| [`backend/engine.py`](backend/engine.py) | Исходные числа, эффекты, правила и формула Score |
+| [`backend/catalog.py`](backend/catalog.py) | Названия мероприятий и смысл показателей |
+| [`backend/main.py`](backend/main.py) | FastAPI, схемы запросов, раздача сайта, интеграция AI |
 | [`requirements.txt`](requirements.txt) | Зависимости приложения с диапазонами версий |
 | [`requirements-dev.txt`](requirements-dev.txt) | Дополнительные зависимости тестирования |
 | [`requirements-lock.txt`](requirements-lock.txt) | Зафиксированный набор версий приложения и инструментов тестирования |
-| [`test_engine.py`](test_engine.py), [`test_main.py`](test_main.py), [`test_analyze.py`](test_analyze.py) | Тесты модели, API и AI-интеграции с подменой провайдера |
-| [`browser_smoke.py`](browser_smoke.py) | Проверка пользовательского сценария в браузере |
+| [`tests/test_engine.py`](tests/test_engine.py), [`tests/test_main.py`](tests/test_main.py), [`tests/test_analyze.py`](tests/test_analyze.py) | Тесты модели, API и AI-интеграции с подменой провайдера |
+| [`tests/test_improve.py`](tests/test_improve.py) | Проверки поиска улучшений и разложения Score |
+| [`tests/browser_smoke.py`](tests/browser_smoke.py) | Проверка пользовательского сценария в браузере |
+
+### Структура репозитория
+
+```text
+backend/               # Python-пакет: API, расчёт и каталог
+  main.py              # FastAPI, валидация запросов и AI-анализ
+  engine.py            # Математика и поиск улучшений
+  catalog.py           # Названия и описание показателей
+frontend/              # Страница, JavaScript, CSS и img/
+tests/                 # Модульные/API-тесты и browser_smoke.py
+docs/                  # Иллюстрации документации
+.github/workflows/     # Проверки GitHub Actions
+artifacts/             # Генерируемые отчёты тестов (игнорируются Git)
+main.py                # Совместимый вход для uvicorn main:app
+requirements*.txt      # Зависимости приложения, разработки и lock-файл
+```
+
+Все команды ниже выполняются из корня репозитория. Сервер можно также запускать
+через `python -m uvicorn backend.main:app --reload`. Фронтенд раздаётся по прежним
+URL; пути к его файлам вычисляются относительно кода сервера, а не текущей папки.
+Для импорта движка используйте `from backend.engine import simulate`.
+Виртуальное окружение `.venv/` содержит только локальные зависимости и не переносится в Git.
+
+При push и pull request GitHub Actions устанавливает зафиксированные зависимости,
+проверяет их совместимость, запускает тесты сервера и проверку синтаксиса JavaScript.
+Браузерная проверка запускается отдельно командой `python -m tests.browser_smoke`;
+ключ OpenAI для тестов не нужен.
 
 ## 6. Установка и запуск
 
@@ -203,7 +231,7 @@ python -m venv .venv
 
 Откройте **[http://127.0.0.1:8000](http://127.0.0.1:8000)**.
 Интерактивная документация API: **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)**.
-`index.html` нужно открывать через сервер, а не двойным кликом.
+`frontend/index.html` нужно открывать через сервер, а не двойным кликом.
 Остановить сервер можно через **Ctrl+C**.
 
 ### Настройка AI
@@ -231,10 +259,10 @@ $env:OPENAI_MODEL = "идентификатор_доступной_модели"
 | --- | --- |
 | `OPENAI_API_KEY` | Ключ для серверного обращения к OpenAI |
 | `OPENAI_MODEL` | Идентификатор модели; значения по умолчанию нет |
-| `BROWSER_CHANNEL` | Необязательный выбор установленного браузера для `browser_smoke.py` |
+| `BROWSER_CHANNEL` | Необязательный выбор установленного браузера для `tests/browser_smoke.py` |
 
 Переменные `export` и `$env:...` относятся к текущему терминалу.
-Файлы `.env` **автоматически не загружаются**. Ключ не нужно вставлять в `app.js` или HTML;
+Файлы `.env` **автоматически не загружаются**. Ключ не нужно вставлять в `frontend/app.js` или HTML;
 его читает сервер из окружения. `.env` и `.venv` исключены из Git.
 
 Без ключа или модели приложение показывает ошибку настройки AI, сохраняя вычисленный результат.
@@ -324,17 +352,17 @@ macOS/Linux, после активации `.venv`:
 
 ```bash
 python -m pip install -r requirements-dev.txt
-python -m unittest -v
+python -m unittest discover -s tests -t . -v
 ```
 
 Windows:
 
 ```powershell
 .venv\Scripts\python -m pip install -r requirements-dev.txt
-.venv\Scripts\python -m unittest -v
+.venv\Scripts\python -m unittest discover -s tests -t . -v
 ```
 
-В трёх файлах `test_*.py` — **17 тестов**. Они проверяют эталонный результат, влияние решений,
+В четырёх файлах `tests/test_*.py` — **20 тестов**. Они проверяют эталонный результат, влияние решений,
 ограничения, синергии, маршруты API, замену поддельных клиентских фактов серверными,
 отсутствие AI-настроек и ошибки провайдера. AI-вызовы подменяются: тесты не расходуют квоту
 и не подтверждают доступность реальной модели.
@@ -344,23 +372,23 @@ Windows:
 
 ```bash
 # macOS/Linux, активированное окружение
-python browser_smoke.py
+python -m tests.browser_smoke
 ```
 
 ```powershell
 # Windows
-.venv\Scripts\python browser_smoke.py
+.venv\Scripts\python -m tests.browser_smoke
 ```
 
 Скрипт запускает временный сервер на свободном локальном порту, проверяет выбор, запреты,
 расчёт, повтор AI, A/B, экспорт, восстановление сохранений и мобильную ширину, затем останавливает сервер.
 Браузерный канал можно переопределить через `BROWSER_CHANNEL`. Установленный браузер нужен отдельно
-от Python-пакета Playwright. AI также подменяется; PDF и снимки экрана записываются в `.venv/`.
+от Python-пакета Playwright. AI также подменяется; PDF и снимки экрана записываются в `artifacts/` (не попадают в Git).
 
 Необязательная проверка JavaScript при установленном Node.js:
 
 ```bash
-node --check app.js
+node --check frontend/app.js
 ```
 
 ## 8. Данные, модель и интеграции
@@ -369,7 +397,7 @@ node --check app.js
 
 Проект использует встроенный синтетический датасет задачи «Аким на 5 часов»:
 **Есиль, Алматы, Сарыарка, Байконур и Нура**. Значения показателей, доли населения,
-веса и эффекты мер находятся в `engine.py`. Названия и описания в `catalog.py`
+веса и эффекты мер находятся в `backend/engine.py`. Названия и описания в `backend/catalog.py`
 ссылаются на «Датасет районов.pdf», страницы 1–3. Сам PDF не входит в отслеживаемые файлы репозитория;
 для запуска данные из внешнего файла не требуются.
 
@@ -442,7 +470,7 @@ Score = 0.7 × D_avg + 0.3 × min(D_района) − N_crit
 
 ### Изображение в интерфейсе
 
-Фотография в шапке хранится в репозитории как `img/ast.jpg` и отдаётся самим приложением.
+Фотография в шапке хранится в репозитории как `frontend/img/ast.jpg` и отдаётся самим приложением.
 Внешний сервис изображений при открытии сайта не вызывается. Изображение служит оформлением,
 а не картой районов или источником расчётных данных.
 

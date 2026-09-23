@@ -2,7 +2,7 @@ import copy
 import json
 import unittest
 
-from engine import INITIAL, ValidationError, simulate
+from backend.engine import INITIAL, ValidationError, simulate
 
 
 REFERENCE = [dict(id="M7", district="Нура"), dict(id="M8", district="Нура"),

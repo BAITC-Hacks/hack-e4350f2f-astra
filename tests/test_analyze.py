@@ -8,8 +8,8 @@ import httpx
 from fastapi.testclient import TestClient
 from openai import APIConnectionError, APITimeoutError, RateLimitError
 
-from main import ANALYSIS_SYSTEM_PROMPT, app
-from test_engine import REFERENCE
+from backend.main import ANALYSIS_SYSTEM_PROMPT, app
+from tests.test_engine import REFERENCE
 
 
 class AnalysisTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class AnalysisTests(unittest.TestCase):
         env = patch.dict(os.environ, {"OPENAI_API_KEY": "test-key", "OPENAI_MODEL": "test-model"})
         env.start()
         self.addCleanup(env.stop)
-        sdk = patch("main.AsyncOpenAI")
+        sdk = patch("backend.main.AsyncOpenAI")
         self.factory = sdk.start()
         self.addCleanup(sdk.stop)
         self.provider = self.factory.return_value.__aenter__.return_value
