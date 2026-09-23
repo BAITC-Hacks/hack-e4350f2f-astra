@@ -49,7 +49,7 @@ class AnalysisTests(unittest.TestCase):
         self.factory.assert_not_called()
 
     def test_invalid_payload(self):
-        for field in ("selected_measures", "budget", "score_delta", "districts"):
+        for field in ("selected_measures",):
             with self.subTest(field=field):
                 payload = self.payload.copy()
                 del payload[field]
@@ -57,6 +57,26 @@ class AnalysisTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 422)
                 self.assertEqual(response.json()["status"], "error")
         self.factory.assert_not_called()
+
+    def test_forged_facts_are_replaced(self):
+        self.payload["score_after"] = 9999
+        self.payload["budget"]["spent"] = 0
+        self.payload["selected_measures"][0]["cost"] = 0
+        self.payload["districts"] = {}
+        response = self.client.post("/api/analyze", json=self.payload)
+        self.assertEqual(response.status_code, 200)
+        facts = json.loads(self.provider.responses.create.call_args.kwargs["input"].split("\n", 1)[1])
+        self.assertAlmostEqual(facts["score_after"], 56.54307)
+        self.assertEqual(facts["budget"]["spent"], 95)
+        self.assertEqual(len(facts["districts"]), 5)
+
+    def test_selection_only_and_invalid_selection(self):
+        response = self.client.post("/api/analyze", json={"selected_measures": REFERENCE})
+        self.assertEqual(response.status_code, 200)
+        self.provider.responses.create.reset_mock()
+        response = self.client.post("/api/analyze", json={"selected_measures": [REFERENCE[0]] * 5})
+        self.assertEqual(response.status_code, 422)
+        self.provider.responses.create.assert_not_called()
 
     def test_provider_errors(self):
         request = httpx.Request("POST", "https://api.openai.com/v1/responses")

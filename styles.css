@@ -1,4 +1,14 @@
 @charset "UTF-8";
+.rules { margin-bottom:20px; line-height:1.8; font-size:13px; }
+.rules summary { cursor:pointer; color:#67e8f9; }
+.rules p { margin-top:12px; }
+.district .indicators { margin-top:16px; }
+.metric-heading { flex-wrap:wrap; }
+.loss { color:#f87171; font-size:10px; }
+#verdict { line-height:1.8; overflow-wrap:anywhere; }
+#verdict h3 { margin:20px 0 8px; color:#67e8f9; }
+#verdict p { margin:8px 0; white-space:pre-wrap; }
+#reference { margin-bottom:12px; }
 :root { color-scheme: dark; --bg:#080d18; --panel:#0d1422; --cyan:#67e8f9; --muted:#94a3b8; --red:#f87171; --border:rgba(255,255,255,.09); }
 * { box-sizing:border-box; }
 body { margin:0; background:radial-gradient(ellipse at top right,rgba(6,182,212,.08),transparent 55%),linear-gradient(rgba(103,232,249,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(103,232,249,.025) 1px,transparent 1px),var(--bg); background-size:auto,40px 40px,40px 40px,auto; color:#f1f5f9; font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }

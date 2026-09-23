@@ -20,6 +20,22 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(data["districts"]["Нура"]["indicators"]["S1"], 38)
         self.assertEqual(data["rules"]["required_measures"], 5)
         self.assertEqual(len(data["rules"]["synergies"]), 3)
+        self.assertAlmostEqual(data["baseline"]["summary"]["score"], 52.55768)
+        self.assertEqual(len(data["indicator_info"]), 10)
+
+    def test_frontend_and_private_files(self):
+        for path in ("/", "/app.js", "/styles.css"):
+            self.assertEqual(self.client.get(path).status_code, 200)
+        for path in ("/main.py", "/.env", "/.git/config"):
+            self.assertEqual(self.client.get(path).status_code, 404)
+
+    def test_different_decisions_change_score(self):
+        original = self.client.post("/api/simulate", json=REFERENCE).json()
+        alternative = [dict(m) for m in REFERENCE]
+        alternative[0]["district"] = "Сарыарка"
+        changed = self.client.post("/api/simulate", json=alternative).json()
+        self.assertAlmostEqual(changed["score_after"], 55.24387)
+        self.assertNotEqual(original["score_after"], changed["score_after"])
 
     def test_reference_both_body_formats(self):
         for payload in (REFERENCE, {"selected_measures": REFERENCE}):

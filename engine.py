@@ -128,6 +128,12 @@ def _metrics(indicators):
                 d_avg=average, d_min=minimum, n_crit=critical), district_scores
 
 
+def baseline_metrics():
+    """Исходные индексы города для API и интерфейса."""
+    summary, districts = _metrics(INITIAL)
+    return dict(summary=summary, districts=districts)
+
+
 def simulate(selected_measures):
     """Проверить 5 решений и рассчитать город после 8 кварталов.
 

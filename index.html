@@ -11,7 +11,7 @@
 <body>
   <main class="dashboard">
     <header>
-      <div class="topline"><span class="online">Ситуационный центр / Астана</span><span>Демо-сценарий <b>/</b> Мандат: 5 часов</span></div>
+      <div class="topline"><span class="online">Ситуационный центр / Астана</span><span>Синтетический сценарий <b>/</b> Мандат: 5 часов</span></div>
       <div class="hero"><div><p class="eyebrow">Город под вашим управлением</p><h1>Аким <span>на 5 часов</span></h1><p class="subtitle">Один город. Пять решений. Каким будет ваш след?</p></div><span class="badge hackathon">Хакатон · городской симулятор</span></div>
       <div class="stats">
         <section class="panel stat" id="budget-panel" aria-labelledby="budget-title">
@@ -20,15 +20,24 @@
           <p id="budget-note" class="stat-note" aria-live="polite">Доступно ещё 100 у.е.</p>
         </section>
         <section class="panel stat" aria-labelledby="decisions-title"><h2 id="decisions-title">Пакет решений</h2><p class="decision-value" aria-live="polite">Выбрано <strong id="decision-count">0</strong> / 5 решений</p><div id="decision-slots" class="decision-slots" aria-hidden="true"></div></section>
-        <section class="panel stat score-panel" aria-labelledby="score-title"><h2 id="score-title">Текущий Score</h2><div class="score-line" aria-live="polite"><strong id="score">52.56</strong><span id="score-delta" hidden>(+3.94)</span></div><p id="score-note" class="stat-note">Исходный индекс качества города</p></section>
+        <section class="panel stat score-panel" aria-labelledby="score-title"><h2 id="score-title">Astana Quality of Life Score</h2><div class="score-line" aria-live="polite"><strong id="score">—</strong><span id="score-delta" hidden></span></div><p id="score-note" class="stat-note">Исходный индекс качества города</p></section>
       </div>
     </header>
+    <p id="error" class="alert-legend" role="alert" hidden></p>
+    <button id="retry-data" class="text-button" type="button" hidden>Повторить загрузку данных</button>
+    <details class="panel section-panel rules"><summary>Как устроена модель</summary>
+      <p>У всех одинаковый бюджет: 100 у.е. Выберите ровно 5 мер, не более двух из одного направления. Не обязательно выбирать по одной мере из каждого направления.</p>
+      <p>T1/T2 — транспорт; E1/E2 — экология и озеленение; S1/S2 — социальная инфраструктура; B1/B2 — безопасность; C1/C2 — городские сервисы. Это условные индексы от 0 до 100: больше — лучше. Конкретные физические единицы исходным датасетом не заданы.</p>
+      <p>Горизонт расчёта — 8 кварталов. Эффект меры умножается на (8 − задержка) / 8. Синергии применяются полностью. Значения ограничены диапазоном 0–100. Каждый показатель строго ниже 40 уменьшает Score на 1.</p>
+      <p>M1 и M3 несовместимы. M4 + M7 и M5 + M13 нельзя выбирать для одного района. Синергии: M1 + M2 → T1 +2; M10 + M12 → B1 +2; M5 + M6 → E2 +2 в районе первой меры.</p>
+      <p id="score-explanation"></p><p id="synergies"></p>
+    </details>
     <div class="workspace">
       <section class="panel section-panel" aria-labelledby="measures-title">
         <div class="section-heading"><div><p class="eyebrow">01 / Оперативный штаб</p><h2 id="measures-title">Выбор мероприятий</h2></div><span id="measure-count" class="badge mono">14 / 14</span></div>
         <div id="filters" class="filters" role="group" aria-label="Фильтр по категории"></div>
-        <div class="selection-help"><p id="selection-note" aria-live="polite">Выберите до 5 мер для своего города</p><button id="reset" type="button" class="text-button" hidden>Сбросить</button></div>
-        <div id="measures" class="measure-list"></div>
+        <div class="selection-help"><p id="selection-note" aria-live="polite">Выберите ровно 5 мер для своего города</p><button id="reset" type="button" class="text-button" hidden>Сбросить</button></div>
+        <button id="reference" class="text-button" type="button" disabled>Загрузить эталонный набор</button><div id="measures" class="measure-list"></div>
       </section>
       <section class="panel section-panel" aria-labelledby="districts-title">
         <div class="section-heading"><div><p class="eyebrow amber">02 / Городская матрица</p><h2 id="districts-title">Состояние районов</h2></div><span id="district-state" class="badge">Исходные данные</span></div>
@@ -38,8 +47,9 @@
     </div>
     <section class="panel advisor section-panel" aria-labelledby="advisor-title">
       <div class="advisor-heading"><div><p class="eyebrow green">03 / Советник AI</p><h2 id="advisor-title">Вердикт стратегии</h2><p class="subtitle">Проверьте решения, прежде чем менять город.</p></div><button id="simulate" class="primary-button" type="button" disabled><span aria-hidden="true">↗</span> Запустить симуляцию и анализ AI</button></div>
-      <div class="terminal"><div class="terminal-heading"><span id="protocol-status">● Аналитический протокол</span><span>Демо · без подключения к AI</span></div><div id="verdict" aria-live="polite" aria-atomic="true"></div></div>
-      <p class="fine-print">Демонстрационная модель: эффекты мер условные, итоговый Score задан сценарием. Изменение набора сбрасывает прогноз.</p>
+      <div class="terminal"><div class="terminal-heading"><span id="protocol-status">● Аналитический протокол</span><span>Анализ выбранного сценария</span></div><div id="verdict" aria-live="polite" aria-atomic="true"></div></div>
+      <button id="retry-analysis" class="text-button" type="button" hidden>Повторить AI-анализ</button>
+      <p class="fine-print">Синтетические данные учебного симулятора. Расчёт показывает результат условной модели, а не прогноз реального города. Изменение решений сбрасывает результат и анализ.</p>
     </section>
     <footer><span>Астана / Лаборатория городских решений</span><span>14 мер · 5 районов · Ваш выбор</span></footer>
     <noscript><p class="alert-legend">Включите JavaScript в браузере для отображения районов, выбора мер и симуляции.</p></noscript>

@@ -2,20 +2,39 @@
 
 import json
 import os
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import Body, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from openai import APIError, APITimeoutError, AsyncOpenAI, RateLimitError
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
+from pydantic import BaseModel, ConfigDict, Field
 
 from engine import INITIAL, MEASURES, POPULATION, SYNERGIES, WEIGHTS
-from engine import ValidationError, simulate
+from engine import ValidationError, baseline_metrics, simulate
 
 
 app = FastAPI(title="Симулятор города", version="1.0.0")
+PROJECT_DIR = Path(__file__).resolve().parent
+
+
+@app.get("/", include_in_schema=False)
+def frontend():
+    return FileResponse(PROJECT_DIR / "index.html")
+
+
+@app.get("/app.js", include_in_schema=False)
+def frontend_script():
+    return FileResponse(PROJECT_DIR / "app.js", media_type="text/javascript")
+
+
+@app.get("/styles.css", include_in_schema=False)
+def frontend_styles():
+    return FileResponse(PROJECT_DIR / "styles.css", media_type="text/css")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?",
@@ -53,31 +72,12 @@ class AnalysisMeasure(SelectedMeasure):
     model_config = ConfigDict(extra="allow", strict=True)
 
 
-class AnalysisBudget(BaseModel):
-    spent: Annotated[FiniteFloat, Field(ge=0)]
-    limit: Annotated[FiniteFloat, Field(ge=0)]
-    remaining: FiniteFloat
-
-
-class AnalysisDistrict(BaseModel):
-    model_config = ConfigDict(extra="allow")
-    before: dict[str, FiniteFloat]
-    after: dict[str, FiniteFloat]
-    deltas: dict[str, FiniteFloat]
-
-
 class AnalysisRequest(BaseModel):
     """Принимает полный успешный ответ /api/simulate без преобразований."""
     status: Literal["ok"] = "ok"
     selected_measures: Annotated[list[AnalysisMeasure], Field(min_length=5, max_length=5)]
-    budget: AnalysisBudget
-    score_delta: FiniteFloat
-    districts: Annotated[dict[str, AnalysisDistrict], Field(min_length=5, max_length=5)]
-    score_before: FiniteFloat | None = None
-    score_after: FiniteFloat | None = None
-    synergies: list[dict] = Field(default_factory=list)
-    summary_before: dict[str, FiniteFloat] | None = None
-    summary_after: dict[str, FiniteFloat] | None = None
+    # Остальные поля прежнего ответа принимаются, но не используются:
+    # все факты для модели формируются сервером заново.
 
 
 def error_response(message, errors):
@@ -104,6 +104,16 @@ def get_data():
     """Каталог мер, исходный город, веса и правила симуляции."""
     return {
         "status": "ok",
+        "baseline": baseline_metrics(),
+        "indicator_info": {
+            key: {"label": f"{direction} — показатель {key[-1]}",
+                  "direction": direction,
+                  "description": "Синтетический индекс от 0 до 100; больше — лучше."}
+            for prefix, direction in (("T", "Транспорт"), ("E", "Экология"),
+                                       ("S", "Соцсфера"), ("B", "Безопасность"),
+                                       ("C", "Сервисы"))
+            for key in (prefix + "1", prefix + "2")
+        },
         "measures": [dict(id=mid, **measure) for mid, measure in MEASURES.items()],
         "districts": {name: {"population_share": POPULATION[name],
                               "indicators": indicators}
@@ -180,7 +190,9 @@ def simulate_city(payload: Annotated[SimulationRequest | list[SelectedMeasure], 
 
 @app.post("/api/analyze")
 async def analyze_city(payload: AnalysisRequest):
-    """Анализ переданных фактов через OpenAI; показатели не пересчитываются."""
+    """Сервер проверяет решения и вычисляет факты; LLM только объясняет их."""
+    selected = [SelectedMeasure(id=m.id, district=m.district) for m in payload.selected_measures]
+    facts = simulate_city(selected)
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     model = os.environ.get("OPENAI_MODEL", "").strip()
     if not api_key or not model:
@@ -189,7 +201,6 @@ async def analyze_city(payload: AnalysisRequest):
             "error": "Для анализа задайте OPENAI_API_KEY и OPENAI_MODEL на сервере.",
         })
 
-    facts = payload.model_dump(exclude_unset=True)
     try:
         async with AsyncOpenAI(api_key=api_key, timeout=45.0, max_retries=0) as client:
             response = await client.responses.create(
